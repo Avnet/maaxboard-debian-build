@@ -10,11 +10,11 @@ function download_local_deb(){
 function install_bluetooth(){
     local conf_bluetooth=$(loadConf "Third" "BLUETOOTH");
     if $conf_bluetooth
+    then
         protected_install bluetooth
         protected_install bluez-obexd
         protected_install bluez-tools
         protected_install blueman
-    then
     fi
 }
 
@@ -195,10 +195,12 @@ function prepare_system_config(){
 function prepare_policy(){
     local ROOTFS_BASE= $1
     # apt-get install without starting
-    cat > ${ROOTFS_BASE}/usr/sbin/policy-rc.d << EOF
-    #!/bin/sh
-    exit 101
-    EOF
+    # cat > ${ROOTFS_BASE}/usr/sbin/policy-rc.d << EOF
+    # #!/bin/sh
+    # exit 101
+    # EOF
+    echo "#!/bin/sh" > ${ROOTFS_BASE}/usr/sbin/policy-rc.d
+    echo "exit 101" >> ${ROOTFS_BASE}/usr/sbin/policy-rc.d
     chmod +x ${ROOTFS_BASE}/usr/sbin/policy-rc.d
 }
 
