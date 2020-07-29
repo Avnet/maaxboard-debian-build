@@ -186,7 +186,7 @@ function download_board_packages(){
 
 function install_packages(){
     local ROOTFS_BASE=$1
-    for f in ${CACHE_PATH}/*
+    for package in ${CACHE_PATH}/*
     do
         if [[ ${package} == *".tar.gz" ]]
         then
@@ -199,17 +199,19 @@ function run_auto_package(){
     ROOTFS_BASE=$1
     tmp_path=$2
     path=$(cd ${ROOTFS_BASE}; pwd)
-    $(tmp_path)"/run" $ROOTFS_BASE
+    ${tmp_path}"/run.sh" $ROOTFS_BASE
 }
 
 function install_auto_packages(){
     local ROOTFS_BASE=$1
-    for f in ${AUTO_PATH}/*
+    for package in ${AUTO_PATH}/*
     do
-        if [[ ${package} == *"test.tar.gz" ]]
+        if [[ ${package} == *"tar.gz" ]]
         then
             local file_name=${package##*/}
             tmp=${AUTO_PATH}"/"${file_name%%.tar.gz}
+            echo ${package}" to "${tmp}
+            mkdir -p ${tmp}
             tar --no-same-owner -xzf ${package} -C ${tmp}
             run_auto_package ${ROOTFS_BASE} ${tmp}
         fi
