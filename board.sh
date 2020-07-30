@@ -121,6 +121,10 @@ function check_error(){
         fi
     fi
 }
+function local_board_config_name(){
+    local conf_board=$(loadConf "Base" "board_config");
+    echo ${conf_board##*/}
+}
 
 # download packages and deb, running ${download_num} jobs concurrently 
 # param 1: path to store debs
@@ -183,7 +187,7 @@ function download_board_packages(){
     check_error $AUTO_DOWNLOAD_ERROR
 }
 
-
+# install packages
 function install_packages(){
     local ROOTFS_BASE=$1
     for package in ${CACHE_PATH}/*
@@ -202,6 +206,8 @@ function run_auto_package(){
     ${tmp_path}"/run.sh" $ROOTFS_BASE
 }
 
+# intsall auto packeages
+# run 'run.sh' in package
 function install_auto_packages(){
     local ROOTFS_BASE=$1
     for package in ${AUTO_PATH}/*
