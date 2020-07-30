@@ -121,7 +121,8 @@ function check_error(){
         fi
     fi
 }
-function local_board_config_name(){
+# get board config name
+function get_board_config_name(){
     local conf_board=$(loadConf "Base" "board_config");
     echo ${conf_board##*/}
 }
