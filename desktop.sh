@@ -12,7 +12,7 @@ function start_desktop(){
 function desktop_backgroud(){
     local ROOTFS_BASE=$1
     local conf_weston=$(loadConf "Desktop" "WESTON");
-    if $conf_weston
+    if [[ ! -z $conf_weston && $conf_weston == "true" ]]
     then
         mkdir -p ${ROOTFS_BASE}/usr/share/images/desktop-base/
         install -m 0644 ${G_WORK_PATH}/desktop.jpg \
@@ -41,7 +41,7 @@ function weston_service(){
 function install_weston(){
     ROOTFS_BASE=$1
     local conf_weston=$(loadConf "Desktop" "WESTON");
-    if $conf_weston
+    if [[ ! -z $conf_weston && $conf_weston == "true" ]]
     then
         weston_service $ROOTFS_BASE
         

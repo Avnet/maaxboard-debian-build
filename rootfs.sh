@@ -1,4 +1,5 @@
 #!/bin/bash
+BOARD_CONF=""
 
 function download_local_deb(){
     src=$1
@@ -49,9 +50,9 @@ function install_gstreamer(){
     fi;
 }
 
-function install_ssh(){
-    local conf_ssh=$(loadConf "Third" "SSH");
-    if $conf_ssh
+function config_ssh(){
+    local conf_ssh=$(load_config_file ${BOARD_CONF} "Apt" "openssh-server");
+    if [[ ! -z $conf_ssh && $conf_ssh == "true" ]]
     then
         protected_install openssh-server
         protected_install openssh-client
@@ -79,42 +80,9 @@ function install_third_stage(){
     # update packages and install base
     apt-get update || apt-get upgrade
 
-    protected_install locales
-    protected_install ntp
+    config_ssh;
 
-    install_ssh;
 
-    protected_install nfs-common
-    protected_install parted
-    protected_install exfat-fuse
-    protected_install vim
-    protected_install cpufrequtils
-
-    #git
-    local conf_git=$(loadConf "Third" "GIT");
-    if $conf_git
-    then
-        protected_install git
-    fi;
-
-    #dosfstools
-    local conf_dosfstools=$(loadConf "Third" "DOSFSTOOLS");
-    if $conf_dosfstools
-    then
-        protected_install dosfstools
-    fi;
-
-    # net-tools (ifconfig, etc.)
-    protected_install net-tools
-    protected_install network-manager
-
-    cp -r ${G_WORK_PATH}/deb/imx-firmware-${IMX_FIRMWARE_VERSION}/* $LOCAL_APT_PATH
-    protected_install imx-firmware-sdma
-    local conf_vpu=$(loadConf "Hardware" "VPU");
-    if $conf_vpu
-    then
-        protected_install imx-firmware-vpu
-    fi;
     protected_install imx-firmware-epdc
 
     protected_install alsa-utils
@@ -189,7 +157,12 @@ function prepare_system_config(){
     echo "locales locales/default_environment_locale select en_US.UTF-8" >> debconf.set
     echo "console-common	console-data/keymap/policy	select	Select keymap from full list" >> debconf.set
     echo "keyboard-configuration keyboard-configuration/variant select 'English (US)'" >> debconf.set
-    echo "openssh-server openssh-server/permit-root-login select true" >> debconf.set
+    
+    local conf_ssh=$(load_config_file ${BOARD_CONF} "Apt" "openssh-server");
+    if [[ ! -z $conf_ssh && $conf_ssh == "true" ]]
+    then
+        echo "openssh-server openssh-server/permit-root-login select true" >> debconf.set
+    fi
 }
 
 function prepare_policy(){
@@ -326,6 +299,13 @@ function install_system(){
 
 function make_debian_rootfs(){
     local ROOTFS_BASE=$1;
+    local LOCAL_APT_PATH=${ROOTFS_BASE}/srv/local-apt-repository
+    mkdir -p $LOCAL_APT_PATH
+
+    log_info "Download packages..."
+    download_board_packages $LOCAL_APT_PATH
+    BOARD_CONF=$(get_board_config_name)
+
     log_info "Make Debian (${DEB_RELEASE}) rootfs start...";
 
     # umount previus mounts (if fail)
@@ -341,8 +321,7 @@ function make_debian_rootfs(){
     echo "avnet ALL=(root) /usr/bin/apt-get, /usr/bin/dpkg, /usr/bin/vi, /sbin/reboot" > ${ROOTFS_BASE}/etc/sudoers.d/avnet
     chmod 0440 ${ROOTFS_BASE}/etc/sudoers.d/avnet
 
-    local LOCAL_APT_PATH=${ROOTFS_BASE}/srv/local-apt-repository
-    mkdir -p $LOCAL_APT_PATH
+    
 
     prepare_system_config
     prepare_policy $ROOTFS_BASE
@@ -350,5 +329,4 @@ function make_debian_rootfs(){
     install_third_stage $LOCAL_APT_PATH
 
     install_system $ROOTFS_BASE
-
 }

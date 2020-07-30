@@ -138,6 +138,5 @@ function download_file(){
     else
         log_error "${file_path} download failed"
     fi
-
     return $ret;
 }

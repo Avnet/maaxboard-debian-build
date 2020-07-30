@@ -1,8 +1,7 @@
 #!/bin/bash
 . ./tool/log.sh
 . ./tool/tool.sh
-. ./desktop.sh
-. ./qt.sh
+. ./board.sh
 . ./rootfs.sh
 
 SCRIPT_NAME=${0##*/}

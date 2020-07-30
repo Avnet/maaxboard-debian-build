@@ -3,7 +3,7 @@
 function install_Qt(){
     local ROOTFS_BASE=$1
     local conf_qt=$(loadConf "Qt" "NEED_INSTALL");
-    if $conf_qt
+    if [[ ! -z $conf_qt && $conf_qt == "true" ]]
     then
         tar --no-same-owner -xzf ${G_WORK_PATH}/packages/qtbase.tar.gz  -C  ${ROOTFS_BASE}
 

@@ -121,9 +121,9 @@ function check_error(){
         fi
     fi
 }
-# get board config name
+
 function get_board_config_name(){
-    local conf_board=$(loadConf "Base" "board_config");
+    conf_board=$(loadConf "Base" "board_config");
     echo ${conf_board##*/}
 }
 
@@ -136,19 +136,21 @@ function download_board_packages(){
     mkdir -p $AUTO_PATH
     rm -f $LOCAL_APT_PATH"/error"
     rm -f $DOWNLOAD_ERROR
-
     local LOCAL_APT_PATH=$1
     local conf_board=$(loadConf "Base" "board_config");
-    download_file $conf_board "."
-    if [[ $? != 0 ]]
+    local conf_board_file=${conf_board##*/}
+    if [ ! -s $conf_board_file ]
     then
-        log_error "Download ${conf_board} failed"
-        exit 1
+        download_file $conf_board "."
+        if [[ $? != 0 ]]
+        then
+            log_error "Download ${conf_board} failed"
+            exit 1
+        fi
     fi
-    conf_board=${conf_board##*/}
-    local sections=$(load_section ${conf_board} "Packages")
-    local sections2=$(load_section ${conf_board} "Deb")
-    local sections3=$(load_section ${conf_board} "Auto")
+    local sections=$(load_section ${conf_board_file} "Packages")
+    local sections2=$(load_section ${conf_board_file} "Deb")
+    local sections3=$(load_section ${conf_board_file} "Auto")
     IFS_old=$IFS 
     IFS=$'\n'
     open_pip_async;
@@ -223,4 +225,21 @@ function install_auto_packages(){
             run_auto_package ${ROOTFS_BASE} ${tmp}
         fi
     done
+}
+
+function install_apt(){
+    local conf_board_file=$(get_board_config_name);
+    local sections=$(load_section ${conf_board_file} "Apt");
+    local name;
+    local value;
+    IFS_old=$IFS 
+    IFS=$'\n'
+    for sect in ${sections[@]}
+    do
+        name=$(parse_config_key $sect)
+        value=$(parse_config_value $sect)
+        [[ ! -z $value && $value == "true" ]] && protected_install $name
+    done
+    IFS=$IFS_old
+    protected_install
 }
