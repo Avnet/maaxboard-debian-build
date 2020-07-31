@@ -30,9 +30,10 @@ function load_section(){
     local m_file=$1
     local m_section=$2
     local is_start=false
+    local lines=$(cat $m_file)
     IFS_old=$IFS 
     IFS=$'\n' 
-    while read line
+    for line in ${lines[@]}
     do
         if [[ $line == "#"* ]]
         then
@@ -51,7 +52,7 @@ function load_section(){
         then
             is_start=true;
         fi
-    done < $m_file
+    done
     # echo ${sections[*]}
     IFS=$IFS_old 
 }
