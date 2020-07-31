@@ -1,61 +1,10 @@
 #!/bin/bash
 BOARD_CONF=""
 
-function download_local_deb(){
-    src=$1
-    target=$2
-
-    cp -r $src $target
-}
-
-function install_bluetooth(){
-    local conf_bluetooth=$(loadConf "Third" "BLUETOOTH");
-    if $conf_bluetooth
-    then
-        protected_install bluetooth
-        protected_install bluez-obexd
-        protected_install bluez-tools
-        protected_install blueman
-    fi
-}
-
-function install_gstreamer(){
-    local LOCAL_APT_PATH=$1
-    local conf_gst=$(loadConf "Hardware" "Gstreamer");
-    if $conf_gst
-    then
-        # gstpluginsbad
-        cp -r ${G_WORK_PATH}/deb/gstpluginsbad/${GST_MM_VERSION}/* $LOCAL_APT_PATH
-
-        # gstpluginsbase
-        cp -r ${G_WORK_PATH}/deb/gstpluginsbase/${GST_MM_VERSION}/* $LOCAL_APT_PATH
-
-        # gstpluginsgood
-        cp -r ${G_WORK_PATH}/deb/gstpluginsgood/${GST_MM_VERSION}/* $LOCAL_APT_PATH
-
-        # gstreamer
-        cp -r ${G_WORK_PATH}/deb/gstreamer/${GST_MM_VERSION}/* $LOCAL_APT_PATH
-
-        # imxgstplugin
-        cp -r ${G_WORK_PATH}/deb/imxgstplugin/${GST_MM_VERSION}/* $LOCAL_APT_PATH
-
-        protected_install gstreamer1.0-alsa
-        protected_install gstreamer1.0-plugins-bad
-        protected_install gstreamer1.0-plugins-base
-        protected_install gstreamer1.0-plugins-base-apps
-        protected_install gstreamer1.0-plugins-ugly
-        protected_install gstreamer1.0-plugins-good
-        protected_install gstreamer1.0-tools
-        protected_install ${IMXGSTPLG}
-    fi;
-}
-
 function config_ssh(){
     local conf_ssh=$(load_config_file ${BOARD_CONF} "Apt" "openssh-server");
     if [[ ! -z $conf_ssh && $conf_ssh == "true" ]]
     then
-        protected_install openssh-server
-        protected_install openssh-client
         # fix config for sshd (permit root login)
         sed -i -e 's/#PermitRootLogin.*/PermitRootLogin\tyes/g' /etc/ssh/sshd_config
     fi;
@@ -79,47 +28,12 @@ function install_third_stage(){
     protected_install local-apt-repository
     # update packages and install base
     apt-get update || apt-get upgrade
+    # apt install board.ini->Apt 
+    install_apt;
 
     config_ssh;
-
-
-    protected_install imx-firmware-epdc
-
-    protected_install alsa-utils
-    # gstreamer
-    install_gstreamer $LOCAL_APT_PATH
-
-    local conf_i2c=$(loadConf "Third" "I2C");
-    if $conf_i2c
-    then
-        protected_install i2c-tools
-    fi;
-    # usb tools
-    protected_install usbutils
-    protected_install picocom
-    # net tools
-    protected_install iperf
-
-    protected_install rng-tools
-    # mtd
-    protected_install mtd-utils
-
-    install_bluetooth
-
-    protected_install gconf2
-    # wifi support packages
-    protected_install hostapd
-    protected_install udhcpd
-
     # disable the hostapd service by default
     systemctl disable hostapd.service
-    # can support
-    protected_install can-utils
-    # pmount
-    protected_install pmount
-    # pm-utils
-    protected_install pm-utils
-
     apt-get -y autoremove
 
     #update iptables alternatives to legacy
@@ -260,7 +174,7 @@ function install_system(){
     install -m 0644 ${G_WORK_PATH}/securetty \
         ${ROOTFS_BASE}/etc/securetty
 
-    install_weston $ROOTFS_BASE
+    # install_weston $ROOTFS_BASE
 
     # remove pm-utils default scripts and install wifi / bt pm-utils script
     rm -rf ${ROOTFS_BASE}/usr/lib/pm-utils/sleep.d/

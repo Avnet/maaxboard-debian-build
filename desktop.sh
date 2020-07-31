@@ -43,7 +43,7 @@ function install_weston(){
     local conf_weston=$(loadConf "Desktop" "WESTON");
     if [[ ! -z $conf_weston && $conf_weston == "true" ]]
     then
-        weston_service $ROOTFS_BASE
+        # weston_service $ROOTFS_BASE
         
         tar --no-same-owner -xzf ${G_WORK_PATH}/packages/weston-init-1.0-r0.tar.gz  -C  ${ROOTFS_BASE}
     	tar --no-same-owner -xzf ${G_WORK_PATH}/packages/weston-5.0.0.imx.tar.gz  -C  ${ROOTFS_BASE}

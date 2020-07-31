@@ -1,12 +1,8 @@
 #!/bin/bash
 
-CACHE_PATH=".cache"
-DOWNLOAD_ERROR=".cache/error"
-DOWNLOAD_OK=".cache/ok"
-
+PACKAGES_PATH=".packeages"
 AUTO_PATH=".auto"
-AUTO_DOWNLOAD_ERROR=".auto/error"
-AUTO_DOWNLOAD_OK=".auto/ok"
+TMP_ROOTFS_PATH=".tmp_rootfs"
 
 function open_pip_async(){
     local THREAD_NUM=$(loadConf "Base" "download_num");
@@ -58,24 +54,7 @@ function check_download_state(){
     return 1;
 }
 
-function download_package(){
-    check_download_state $1 $CACHE_PATH
-    if [[ $? == 0 ]]
-    then
-        return
-    fi
-
-    download_file $1 $CACHE_PATH
-
-    if [[ $? == 0 ]]
-    then
-        echo "$1" >> $DOWNLOAD_OK
-    else
-        echo "$1" >> $DOWNLOAD_ERROR
-    fi
-}
-
-function download_deb(){
+function download_common(){
     check_download_state $1 $2
     if [[ $? == 0 ]]
     then
@@ -91,26 +70,25 @@ function download_deb(){
     fi
 }
 
-function download_auto_packages(){
-    check_download_state $1 $AUTO_PATH
-    if [[ $? == 0 ]]
-    then
-        return
-    fi
+function download_rootfs(){
+    local file_path=$1
+    local tmp_file_path=${file_path#*/}
+    local tmp_path=$TMP_ROOTFS_PATH"/"${tmp_file_path%/*}
+    mkdir -p $tmp_path
 
-    download_file $1 $AUTO_PATH
-
-    if [[ $? == 0 ]]
-    then
-        echo "$1" >> $AUTO_DOWNLOAD_OK
-    else
-        echo "$1" >> $AUTO_DOWNLOAD_ERROR
+    download_file $file_path $tmp_path
+    echo "${file_path} download: "$?
+    if [[ $? != 0 ]];then
+        echo "$file_path" >> $TMP_ROOTFS_PATH"/error"
     fi
 }
+
 function check_error(){
     local error_file=$1
+    ret=0;
     if [ -s $error_file ]
     then
+        ret=1;
         local error=$(cat ${error_file} | tr "\n" ",")
         echo "Download packages[${error}] failed."
         read -p "to continue[Y/n]: " ins
@@ -120,10 +98,11 @@ function check_error(){
             exit 1
         fi
     fi
+    return $ret
 }
 
 function get_board_config_name(){
-    conf_board=$(loadConf "Base" "board_config");
+    local conf_board=$(loadConf "Base" "board_config");
     echo ${conf_board##*/}
 }
 
@@ -132,10 +111,13 @@ function get_board_config_name(){
 # packages store: .cache
 function download_board_packages(){
     local LOCAL_APT_PATH=$1
-    mkdir -p $CACHE_PATH
+    mkdir -p $PACKAGES_PATH
     mkdir -p $AUTO_PATH
     rm -f $LOCAL_APT_PATH"/error"
-    rm -f $DOWNLOAD_ERROR
+    rm -f $AUTO_PATH"/error"
+    rm -f $TMP_ROOTFS_PATH"/error"
+    rm -f $PACKAGES_PATH"/error"
+
     local LOCAL_APT_PATH=$1
     local conf_board=$(loadConf "Base" "board_config");
     local conf_board_file=${conf_board##*/}
@@ -151,15 +133,17 @@ function download_board_packages(){
     local sections=$(load_section ${conf_board_file} "Packages")
     local sections2=$(load_section ${conf_board_file} "Deb")
     local sections3=$(load_section ${conf_board_file} "Auto")
+    local sections4=$(load_section ${conf_board_file} "Rootfs")
     IFS_old=$IFS 
     IFS=$'\n'
     open_pip_async;
+    mkdir -p $PACKAGES_PATH
     for sect in ${sections[@]}
     do
         value=$(parse_config_value $sect)
         read -u3
         {
-            download_package $value
+            download_common $value $PACKAGES_PATH
             echo >&3
         }&
     done
@@ -168,16 +152,29 @@ function download_board_packages(){
         value=$(parse_config_value $sect)
         read -u3
         {
-            download_deb $value $LOCAL_APT_PATH
+            download_common $value $LOCAL_APT_PATH
             echo >&3
         }&
     done
+    mkdir -p $AUTO_PATH
     for sect in ${sections3[@]}
     do
         value=$(parse_config_value $sect)
         read -u3
         {
-            download_auto_packages $value
+            download_common $value $AUTO_PATH
+            echo >&3
+        }&
+    done
+    for sect in ${sections4[@]}
+    do
+        value=$(parse_config_value $sect)
+        key=$(parse_config_key $sect)
+        model=${key:0-7}
+        [[ $model == "_d_"* ]] && continue
+        read -u3
+        {
+            download_rootfs $value
             echo >&3
         }&
     done
@@ -185,27 +182,39 @@ function download_board_packages(){
     close_pip_async;
     IFS=$IFS_old
 
-    check_error $DOWNLOAD_ERROR
+    check_error $PACKAGES_PATH"/error"
     check_error $LOCAL_APT_PATH"/error"
-    check_error $AUTO_DOWNLOAD_ERROR
+    if [[ $? != 0 ]]
+    then
+        log_error "download debs failed,stop."
+        exit 1;
+    fi
+    check_error $AUTO_PATH"/error"
+    check_error $TMP_ROOTFS_PATH"/error"
+    if [[ $? != 0 ]]
+    then
+        log_error "download rootfs failed,stop."
+        exit 1;
+    fi
 }
 
 # install packages
 function install_packages(){
     local ROOTFS_BASE=$1
-    for package in ${CACHE_PATH}/*
+    for package in ${PACKAGES_PATH}/*
     do
         if [[ ${package} == *".tar.gz" ]]
         then
+            log_info "install package: "$package
             tar --no-same-owner -xzf ${package}  -C  ${ROOTFS_BASE}
         fi
     done
 }
 
 function run_auto_package(){
-    ROOTFS_BASE=$1
-    tmp_path=$2
-    path=$(cd ${ROOTFS_BASE}; pwd)
+    local ROOTFS_BASE=$1
+    local tmp_path=$2
+    local path=$(cd ${ROOTFS_BASE}; pwd)
     ${tmp_path}"/run.sh" $ROOTFS_BASE
 }
 
@@ -218,8 +227,8 @@ function install_auto_packages(){
         if [[ ${package} == *"tar.gz" ]]
         then
             local file_name=${package##*/}
+            log_info "install auto packages: "$file_name
             tmp=${AUTO_PATH}"/"${file_name%%.tar.gz}
-            echo ${package}" to "${tmp}
             mkdir -p ${tmp}
             tar --no-same-owner -xzf ${package} -C ${tmp}
             run_auto_package ${ROOTFS_BASE} ${tmp}
@@ -241,5 +250,29 @@ function install_apt(){
         [[ ! -z $value && $value == "true" ]] && protected_install $name
     done
     IFS=$IFS_old
-    protected_install
+}
+
+function install_rootfs(){
+    local ROOTFS_BASE=$1
+    local conf_board_file=$(get_board_config_name);
+    local sections=$(load_section ${conf_board_file} "Rootfs")
+    for sect in ${sections[@]}
+    do
+        value=$(parse_config_value $sect)
+        key=$(parse_config_key $sect)
+        model=${key:0-7}
+        m=${key:0-4}
+        if [[ $model == "_d_"* ]]; then
+            log_info "install -d "${ROOTFS_BASE}"/"$value
+            install -m ${m} -d ${ROOTFS_BASE}"/"$value
+        elif [[ $model == "_m_"* ]]; then
+            num=${#key}-7
+            name=${key:0:num}
+            tmp_path=${value#*/}
+            tmp_file=$TMP_ROOTFS_PATH"/"${tmp_path}
+            mkdir -p $tmp_path
+            log_info "install "${m}" "${tmp_file}"  "${ROOTFS_BASE}"/"${tmp_path%/*}"/"${name}
+            install -m ${m} ${tmp_file} ${ROOTFS_BASE}"/"${tmp_path%/*}"/"${name}
+        fi
+    done
 }
