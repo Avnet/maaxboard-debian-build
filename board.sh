@@ -3,6 +3,7 @@
 PACKAGES_PATH=".packeages"
 AUTO_PATH=".auto"
 TMP_ROOTFS_PATH=".tmp_rootfs"
+HOOKS_PATH="hooks"
 
 function open_pip_async(){
     local THREAD_NUM=$(loadConf "Base" "download_num");
@@ -106,6 +107,31 @@ function get_board_config_name(){
     echo ${conf_board##*/}
 }
 
+# Recursive call to download board config
+function download_board_ini(){
+    local conf_board=$1
+    local conf_board_file=${conf_board##*/}
+    if [ ! -s $conf_board_file ]
+    then
+        download_file $conf_board "."
+        if [[ $? != 0 ]]
+        then
+            log_error "Download ${conf_board} failed"
+            exit 1
+        fi
+    fi
+
+    local sections=$(load_section ${conf_board_file} "Include")
+    IFS_old=$IFS 
+    IFS=$'\n'
+    for sect in ${sections[@]}
+    do
+        value=$(parse_config_value $sect)
+        download_board_ini $value
+    done
+    IFS=$IFS_old
+}
+
 # download packages and deb, running ${download_num} jobs concurrently 
 # param 1: path to store debs
 # packages store: .cache
@@ -121,19 +147,21 @@ function download_board_packages(){
     local LOCAL_APT_PATH=$1
     local conf_board=$(loadConf "Base" "board_config");
     local conf_board_file=${conf_board##*/}
-    if [ ! -s $conf_board_file ]
-    then
-        download_file $conf_board "."
-        if [[ $? != 0 ]]
-        then
-            log_error "Download ${conf_board} failed"
-            exit 1
-        fi
-    fi
-    local sections=$(load_section ${conf_board_file} "Packages")
-    local sections2=$(load_section ${conf_board_file} "Deb")
-    local sections3=$(load_section ${conf_board_file} "Auto")
-    local sections4=$(load_section ${conf_board_file} "Rootfs")
+    download_board_ini $conf_board
+    # if [ ! -s $conf_board_file ]
+    # then
+    #     download_file $conf_board "."
+    #     if [[ $? != 0 ]]
+    #     then
+    #         log_error "Download ${conf_board} failed"
+    #         exit 1
+    #     fi
+    # fi
+    local sections=$(load_section2 ${conf_board_file} "Packages")
+    local sections2=$(load_section2 ${conf_board_file} "Deb")
+    local sections3=$(load_section2 ${conf_board_file} "Auto")
+    local sections4=$(load_section2 ${conf_board_file} "Rootfs")
+    local sections5=$(load_section ${conf_board_file} "Hooks")
     IFS_old=$IFS 
     IFS=$'\n'
     open_pip_async;
@@ -178,6 +206,16 @@ function download_board_packages(){
             echo >&3
         }&
     done
+    mkdir -p $HOOKS_PATH
+    for sect in ${sections5[@]}
+    do
+        value=$(parse_config_value $sect)
+        read -u3
+        {
+            download_common $value $HOOKS_PATH
+            echo >&3
+        }&
+    done
     wait
     close_pip_async;
     IFS=$IFS_old
@@ -196,19 +234,49 @@ function download_board_packages(){
         log_error "download rootfs failed,stop."
         exit 1;
     fi
+
+    check_error $HOOKS_PATH"/error"
+    if [[ $? != 0 ]]
+    then
+        log_error "download Hooks failed,stop."
+        exit 1;
+    fi
+
+    load_hooks;
 }
 
 # install packages
 function install_packages(){
     local ROOTFS_BASE=$1
-    for package in ${PACKAGES_PATH}/*
+    local conf_board_file=$(get_board_config_name);
+    local sections=$(load_section2 ${conf_board_file} "Packages");
+    
+    pre_call_function ${ROOTFS_BASE} "Packages" "all"
+    
+    IFS_old=$IFS 
+    IFS=$'\n'
+    for sect in ${sections[@]}
     do
-        if [[ ${package} == *".tar.gz" ]]
-        then
-            log_info "install package: "$package
-            tar --no-same-owner -xzf ${package}  -C  ${ROOTFS_BASE}
-        fi
+        value=$(parse_config_value $sect)
+        key=$(parse_config_key $sect)
+        tar_file=${PACKAGES_PATH}"/"${value##*/}
+        log_info "install package: "$tar_file
+
+        pre_call_function ${ROOTFS_BASE} "Packages" ${key}
+        tar --no-same-owner -xzf ${tar_file}  -C  ${ROOTFS_BASE}
+        post_call_function ${ROOTFS_BASE} "Packages" ${key}
     done
+    IFS=$IFS_old
+
+    post_call_function ${ROOTFS_BASE} "Packages" "all"
+    # for package in ${PACKAGES_PATH}/*
+    # do
+    #     if [[ ${package} == *".tar.gz" ]]
+    #     then
+    #         log_info "install package: "$package
+    #         tar --no-same-owner -xzf ${package}  -C  ${ROOTFS_BASE}
+    #     fi
+    # done
 }
 
 function run_auto_package(){
@@ -222,40 +290,78 @@ function run_auto_package(){
 # run 'run.sh' in package
 function install_auto_packages(){
     local ROOTFS_BASE=$1
-    for package in ${AUTO_PATH}/*
+    local conf_board_file=$(get_board_config_name);
+    local sections=$(load_section2 ${conf_board_file} "Auto");
+
+    pre_call_function ${ROOTFS_BASE} "Auto" "all"
+
+    IFS_old=$IFS 
+    IFS=$'\n'
+    for sect in ${sections[@]}
     do
-        if [[ ${package} == *"tar.gz" ]]
-        then
-            local file_name=${package##*/}
-            log_info "install auto packages: "$file_name
-            tmp=${AUTO_PATH}"/"${file_name%%.tar.gz}
-            mkdir -p ${tmp}
-            tar --no-same-owner -xzf ${package} -C ${tmp}
-            run_auto_package ${ROOTFS_BASE} ${tmp}
-        fi
+        value=$(parse_config_value $sect)
+        key=$(parse_config_key $sect)
+        file_name=${value##*/}
+        tar_file=${AUTO_PATH}"/"${value##*/}
+        log_info "install auto package: "$tar_file
+        tmp=${AUTO_PATH}"/"${file_name%%.tar.gz}
+        mkdir -p ${tmp}
+
+        pre_call_function ${ROOTFS_BASE} "Auto" ${key}
+        tar --no-same-owner -xzf ${tar_file} -C ${tmp}
+        run_auto_package ${ROOTFS_BASE} ${tmp}
+        post_call_function ${ROOTFS_BASE} "Auto" ${key}
     done
+    IFS=$IFS_old
+
+    post_call_function ${ROOTFS_BASE} "Auto" "all"
+    # for package in ${AUTO_PATH}/*
+    # do
+    #     if [[ ${package} == *"tar.gz" ]]
+    #     then
+    #         local file_name=${package##*/}
+    #         log_info "install auto packages: "$file_name
+    #         tmp=${AUTO_PATH}"/"${file_name%%.tar.gz}
+    #         mkdir -p ${tmp}
+    #         tar --no-same-owner -xzf ${package} -C ${tmp}
+    #         run_auto_package ${ROOTFS_BASE} ${tmp}
+    #     fi
+    # done
 }
 
 function install_apt(){
     local conf_board_file=$(get_board_config_name);
-    local sections=$(load_section ${conf_board_file} "Apt");
+    local sections=$(load_section2 ${conf_board_file} "Apt");
     local name;
     local value;
+
+    pre_call_function ${ROOTFS_BASE} "Apt" "all"
+
     IFS_old=$IFS 
     IFS=$'\n'
     for sect in ${sections[@]}
     do
         name=$(parse_config_key $sect)
         value=$(parse_config_value $sect)
+
+        pre_call_function ${ROOTFS_BASE} "Apt" ${name}
         [[ ! -z $value && $value == "true" ]] && protected_install $name
+        post_call_function ${ROOTFS_BASE} "Apt" ${name}
     done
     IFS=$IFS_old
+
+    post_call_function ${ROOTFS_BASE} "Apt" "all"
 }
 
 function install_rootfs(){
     local ROOTFS_BASE=$1
     local conf_board_file=$(get_board_config_name);
-    local sections=$(load_section ${conf_board_file} "Rootfs")
+    local sections=$(load_section2 ${conf_board_file} "Rootfs")
+
+    pre_call_function ${ROOTFS_BASE} "Rootfs" "all"
+
+    IFS_old=$IFS 
+    IFS=$'\n'
     for sect in ${sections[@]}
     do
         value=$(parse_config_value $sect)
@@ -275,4 +381,22 @@ function install_rootfs(){
             install -m ${m} ${tmp_file} ${ROOTFS_BASE}"/"${tmp_path%/*}"/"${name}
         fi
     done
+    IFS=$IFS_old
+
+    post_call_function ${ROOTFS_BASE} "Rootfs" "all"
+}
+
+function load_hooks(){
+    local conf_board_file=$(get_board_config_name);
+    local sections=$(load_section2 ${conf_board_file} "Hooks");
+    IFS_old=$IFS 
+    IFS=$'\n'
+    for sect in ${sections[@]}
+    do
+        key=$(parse_config_key $sect)
+        if [[ -s ${HOOKS_PATH}"/"${key} ]];then
+            . ${HOOKS_PATH}"/"${key}
+        fi
+    done
+    IFS=$IFS_old
 }

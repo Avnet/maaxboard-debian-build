@@ -57,6 +57,28 @@ function load_section(){
     IFS=$IFS_old 
 }
 
+# Recursive call to load section
+function load_section2(){
+    local m_file=$1
+    local m_section=$2
+    # echo $m_file" start load includes"
+    local includes=$(load_section $m_file "Include")
+    IFS_old=$IFS 
+    IFS=$'\n'
+    for sect in ${includes[@]}
+    do
+
+        sub_file=${sect##*/}
+        # load_section2 $sub_file $m_section
+        load_section2 $sub_file $m_section
+    done
+    IFS=$IFS_old
+    # load_section $m_file $m_section
+    # data=$(load_section $m_file $m_section)
+    # echo $data
+    load_section $m_file $m_section
+}
+
 # parse config line name
 function parse_config_key(){
     local line=$1
@@ -140,4 +162,40 @@ function download_file(){
         log_error "${file_path} download failed"
     fi
     return $ret;
+}
+
+function is_function_exist(){
+    local func=$1
+    local ret=1;
+    if [ "$(type -t $func)" == function ]
+    then
+        ret=0;
+    fi
+    return $ret;
+}
+
+function pre_call_function(){
+    local section=$2
+    local key=$3
+    local ROOTFS_BASE=$1
+    local func_name="pre_${section}_${key}"
+
+    is_function_exist $func_name
+    if [[ $? == 0 ]];then
+        log_info "[${section}] ${key}: pre call"
+        ${func_name} $ROOTFS_BASE
+    fi
+}
+
+function post_call_function(){
+    local section=$2
+    local key=$3
+    local ROOTFS_BASE=$1
+    local func_name="post_${section}_${key}"
+
+    is_function_exist $func_name
+    if [[ $? == 0 ]];then
+        log_info "[${section}] ${key}: post call"
+        ${func_name} $ROOTFS_BASE
+    fi
 }

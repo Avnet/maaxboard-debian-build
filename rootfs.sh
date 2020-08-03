@@ -175,35 +175,19 @@ function install_system(){
         ${ROOTFS_BASE}/etc/securetty
 
     # install_weston $ROOTFS_BASE
-
+    install_rootfs $ROOTFS_BASE
     # remove pm-utils default scripts and install wifi / bt pm-utils script
     rm -rf ${ROOTFS_BASE}/usr/lib/pm-utils/sleep.d/
     rm -rf ${ROOTFS_BASE}/usr/lib/pm-utils/module.d/
     rm -rf ${ROOTFS_BASE}/usr/lib/pm-utils/power.d/
-
-    log_info "binaries rootfs patching......"
-    ## binaries rootfs patching ##
-    install -m 0644 ${G_WORK_PATH}/issue ${ROOTFS_BASE}/etc/
-    install -m 0644 ${G_WORK_PATH}/issue.net ${ROOTFS_BASE}/etc/
-    install -m 0755 ${G_WORK_PATH}/rc.local ${ROOTFS_BASE}/etc/
-    install -d ${ROOTFS_BASE}/boot/
-
-    desktop_backgroud $ROOTFS_BASE
+    
     # Revert regular booting
     rm -f ${ROOTFS_BASE}/usr/sbin/policy-rc.d
 
     # copy custom files
-    cp ${G_WORK_PATH}/fw_env.config ${ROOTFS_BASE}/etc
-    cp ${G_WORK_PATH}/10-imx.rules ${ROOTFS_BASE}/etc/udev/rules.d
-    cp ${G_WORK_PATH}/mount.blacklist ${ROOTFS_BASE}/etc/udev/rules.d
-    cp ${G_WORK_PATH}/automount.rules ${ROOTFS_BASE}/etc/udev/rules.d
-    mkdir -p ${ROOTFS_BASE}/etc/udev/scripts/
-    install -m 0755 ${G_WORK_PATH}/mount.sh \
-        ${ROOTFS_BASE}/etc/udev/scripts/mount.sh
-
-    if [ "${BOARD}" == "maaxboard" ]; then
-        cp ${G_WORK_PATH}/${BOARD}/*.rules ${ROOTFS_BASE}/etc/udev/rules.d
-    fi
+    # if [ "${BOARD}" == "maaxboard" ]; then
+    #     cp ${G_WORK_PATH}/${BOARD}/*.rules ${ROOTFS_BASE}/etc/udev/rules.d
+    # fi
     cleanGL $ROOTFS_BASE
     install_tars $ROOTFS_BASE
     log_info "build finished..........."
