@@ -1,5 +1,4 @@
 #!/bin/bash
-CONFIG_FILE=./config.ini
 
 # read config.ini
 # param 1: Section
@@ -7,8 +6,10 @@ CONFIG_FILE=./config.ini
 function loadConf(){
     local SECTION=$1;
     local CONFIG=$2;
-    local value=`awk -F '=' '/\['$SECTION'\]/{a=1}a==1&&$1~/'$CONFIG'/{print $2;exit}' $CONFIG_FILE`
-    echo $value;
+    if [[ -f $CONFIG_FILE ]];then
+        local value=`awk -F '=' '/\['$SECTION'\]/{a=1}a==1&&$1~/'$CONFIG'/{print $2;exit}' $CONFIG_FILE`
+        echo $value;
+    fi
 }
 
 # read ini config file
@@ -19,8 +20,46 @@ function load_config_file(){
     local FILE=$1
     local SECTION=$2;
     local CONFIG=$3;
-    local value=`awk -F '=' '/\['$SECTION'\]/{a=1}a==1&&$1~/'$CONFIG'/{print $2;exit}' $FILE`
-    echo $value;
+
+    if [[ ! -f $FILE ]];then
+        if [[ -f ${ABSOLUTE_DIRECTORY}"/"$FILE ]];then
+            FILE=${ABSOLUTE_DIRECTORY}"/"$FILE
+        else
+            return 1
+        fi
+    fi
+    if [[ -f $FILE ]];then
+        local value=`awk -F '=' '/\['$SECTION'\]/{a=1}a==1&&$1~/'$CONFIG'/{print $2;exit}' $FILE`
+        echo $value;
+    fi
+}
+
+function load_config_file2(){
+    local FILE=$1
+    local SECTION=$2;
+    local CONFIG=$3;
+    local value=$(load_config_file $FILE $SECTION $CONFIG)
+    if [ -n "$value" ];then
+        echo $value;
+        return 0;
+    fi
+    
+    local includes=$(load_section $FILE "Include")
+    IFS_old=$IFS 
+    IFS=$'\n'
+    for sect in ${includes[@]}
+    do
+        # sub_file=$(parse_config_value $sect)
+        sub_file=${sect##*/}
+        # load_section2 $sub_file $m_section
+        load_config_file2 $sub_file $SECTION $CONFIG
+        if [[ $? == 0 ]];then
+            return 0;
+        fi
+    done
+    IFS=$IFS_old
+
+    return 1;
 }
 
 # load config sections
@@ -30,7 +69,15 @@ function load_section(){
     local m_file=$1
     local m_section=$2
     local is_start=false
+    if [[ ! -f $m_file ]];then
+        if [[ -f ${ABSOLUTE_DIRECTORY}"/"$m_file ]];then
+            m_file=${ABSOLUTE_DIRECTORY}"/"$m_file
+        else
+            return 1;
+        fi
+    fi
     local lines=$(cat $m_file)
+    [[ -z lines ]] && return 0;
     IFS_old=$IFS 
     IFS=$'\n' 
     for line in ${lines[@]}
@@ -63,16 +110,19 @@ function load_section2(){
     local m_section=$2
     # echo $m_file" start load includes"
     local includes=$(load_section $m_file "Include")
-    IFS_old=$IFS 
-    IFS=$'\n'
-    for sect in ${includes[@]}
-    do
+    if [[ -n $includes ]];then
+        IFS_old=$IFS 
+        IFS=$'\n'
+        for sect in ${includes[@]}
+        do
 
-        sub_file=${sect##*/}
-        # load_section2 $sub_file $m_section
-        load_section2 $sub_file $m_section
-    done
-    IFS=$IFS_old
+            # sub_file=$(parse_config_value $sect)
+            sub_file=${sect##*/}
+            # load_section2 $sub_file $m_section
+            load_section2 $sub_file $m_section
+        done
+        IFS=$IFS_old
+    fi
     # load_section $m_file $m_section
     # data=$(load_section $m_file $m_section)
     # echo $data
@@ -94,23 +144,22 @@ function parse_config_value(){
 # Retry 5 times,when failed
 function protected_install()
 {
-    local _name=\${1}
+    local _name=$1
     local repeated_cnt=5;
     local RET_CODE=1;
 
-    log_info " Installing \${_name}";
-    for (( c=0; c<\${repeated_cnt}; c++ ))
+    log_info " Installing ${_name}";
+    for (( c=0; c<${repeated_cnt}; c++ ))
     do
-        apt install -y \${_name} && {
+        apt install -y ${_name} && {
             RET_CODE=0;
             break;
         };
 
-        echo
-        echo "##########################"
-        echo "## Fix missing packages ##"
-        echo "##########################"
-        echo
+        log_info "##########################"
+        log_info "## Fix missing packages ##"
+        log_info "##########################"
+        log_info
 
         sleep 2;
 
@@ -119,9 +168,9 @@ function protected_install()
             break;
         };
 
-        echo "##########################"
-        echo "FIX error processing package XXX (--configure)"
-        echo "##########################"
+        log_info "##########################"
+        log_info "FIX error processing package XXX (--configure)"
+        log_info "##########################"
         sleep 2;
         
         cp -fr /var/lib/dpkg/info/* /var/lib/dpkg/info_old/
@@ -137,7 +186,7 @@ function protected_install()
 
     done
 
-    return \${RET_CODE}
+    return ${RET_CODE}
 }
 
 # download file
@@ -152,6 +201,7 @@ function download_file(){
     local base_url=$(loadConf "Base" "download_url");
     # echo $base_url
     local base_url2=${base_url/%"<file_path>"/$file_path}
+    log_info $base_url2
     # echo $base_url2
     wget $base_url2 -O ${target_path}"/"${file_name}
     ret=$?
@@ -167,11 +217,15 @@ function download_file(){
 function is_function_exist(){
     local func=$1
     local ret=1;
-    if [ "$(type -t $func)" == function ]
-    then
-        ret=0;
+    local func_ret="$(typeset -F $func)"
+
+    if [[ -n $func_ret ]];then
+        if [[ $func_ret == $func ]];then
+            echo "0"
+            return;
+        fi
     fi
-    return $ret;
+    echo "1"
 }
 
 function pre_call_function(){
@@ -180,8 +234,9 @@ function pre_call_function(){
     local ROOTFS_BASE=$1
     local func_name="pre_${section}_${key}"
 
-    is_function_exist $func_name
-    if [[ $? == 0 ]];then
+    local status=$(is_function_exist $func_name)
+
+    if [[ $status == "0" ]];then
         log_info "[${section}] ${key}: pre call"
         ${func_name} $ROOTFS_BASE
     fi
@@ -193,8 +248,8 @@ function post_call_function(){
     local ROOTFS_BASE=$1
     local func_name="post_${section}_${key}"
 
-    is_function_exist $func_name
-    if [[ $? == 0 ]];then
+    local status=$(is_function_exist $func_name)
+    if [[ $status == "0" ]];then
         log_info "[${section}] ${key}: post call"
         ${func_name} $ROOTFS_BASE
     fi

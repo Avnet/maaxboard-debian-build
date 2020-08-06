@@ -4,17 +4,27 @@
 . ./board.sh
 . ./rootfs.sh
 
+set -e
 SCRIPT_NAME=${0##*/}
 
 readonly ABSOLUTE_FILENAME=`readlink -e "$0"`
 readonly ABSOLUTE_DIRECTORY=`dirname ${ABSOLUTE_FILENAME}`
 
-readonly SCRIPT_START_DATE=$(date "+%Y%m%d");
-readonly DEF_ROOTFS_TARBALL_NAME="rootfs_${SCRIPT_START_DATE}.tar.gz"  
-readonly DEF_ROOTFS_IMG_NAME="debian_buster_avnet_${SCRIPT_START_DATE}.img"
+readonly CONFIG_FILE=${ABSOLUTE_DIRECTORY}"/config.ini"
+readonly PACKAGES_PATH=${ABSOLUTE_DIRECTORY}"/.packeages"
+readonly AUTO_PATH=${ABSOLUTE_DIRECTORY}"/.auto"
+readonly DEB_PATH=${ABSOLUTE_DIRECTORY}"/.deb"
+readonly TMP_ROOTFS_PATH=${ABSOLUTE_DIRECTORY}"/.tmp_rootfs"
+readonly HOOKS_PATH=${ABSOLUTE_DIRECTORY}"/hooks"
+readonly LOG_PATH=${ABSOLUTE_DIRECTORY}"/logs"
 
 readonly DEF_DEBIAN_MIRROR=$(loadConf "Debian" "DEBIAN_MIRROR");
 readonly DEB_RELEASE=$(loadConf "Debian" "DEBIAN_RELEASE");
+
+readonly SCRIPT_START_DATE=$(date "+%Y%m%d");
+readonly DEF_ROOTFS_TARBALL_NAME="rootfs_${SCRIPT_START_DATE}.tar.gz"  
+readonly DEF_ROOTFS_IMG_NAME="debian_${DEB_RELEASE}_avnet_${SCRIPT_START_DATE}.img"
+
 
 readonly DEF_BUILDENV="${ABSOLUTE_DIRECTORY}"
 readonly DEF_SRC_DIR="${DEF_BUILDENV}/src"
@@ -34,7 +44,7 @@ function usage()
     echo "Make Debian ${DEB_RELEASE} image and create a bootabled SD card"
     echo
     echo "Usage:"
-    echo " BOARD=<maaxboard/maaxboard_mini> ./${SCRIPT_NAME} options"
+    echo " ./${SCRIPT_NAME} options"
     echo
     echo "Options:"
     echo "  -h|--help   -- print this help"
@@ -47,25 +57,9 @@ function usage()
     echo "  -o|--output -- custom select output directory (default: \"${PARAM_OUTPUT_DIR}\")"
     echo "  --debug     -- enable debug mode for this script"
     echo "Examples of use:"
-    echo "  clean the workplace:            sudo BOARD=maaxboard/maaxboard_mini ./debian_build.sh -c clean"
-    echo "  make rootfs image:              sudo BOARD=maaxboard/maaxboard_mini ./debian_build.sh -c rootfs"
+    echo "  clean the workplace:            sudo ./debian_build.sh -c clean"
+    echo "  make rootfs image:              sudo ./debian_build.sh -c rootfs"
     echo
-}
-
-function checkBorad(){
-    echo $BOARD
-    if [ ! -e ${G_WORK_PATH}/${BOARD}/${BOARD}.sh ]; then
-        log_error "Illegal Board: ${BOARD}";
-        usage;
-        exit 1
-    fi
-}
-
-function checkPermission(){
-    [ ${EUID} -ne 0 ] && {
-        log_error "this command must be run as root (or sudo/su)"
-        exit 1;
-    };
 }
 
 # make firmware for wl bcm module
@@ -100,11 +94,11 @@ function make_tarball()
     cd $1
 
     chown root:root .
-    pr_info "make tarball from folder ${1}"
-    pr_info "Remove old tarball $2"
+    log_info "make tarball from folder ${1}"
+    log_info "Remove old tarball $2"
     rm -f $2
 
-    pr_info "Create $2"
+    log_info "Create $2"
 
     RETVAL=0
     tar czf $2 . || {
@@ -145,10 +139,11 @@ function make_images()
     #Main functions
     check_dependencies
     log_info "Begin generate ext4 img ..."
-    imagesize=$(du -sm ${1} 2>/dev/null | awk '{print $1}')
+    local imagesize=$(du -sm ${1} 2>/dev/null | awk '{print $1}')
     imagesize=$((`echo $imagesize | sed 's/M//'`))
     log_info "imagesize=${imagesize}"
-    imagesize=$(($imagesize+1536))
+    local extend_size=$(loadConf "Base" "images_extend_size");
+    imagesize=$(($imagesize+$extend_size))
     log_info "imagesize all =${imagesize}"
 
     dd if=/dev/zero of="$2" bs=1M count=0 seek=$imagesize
@@ -183,7 +178,29 @@ function cmd_make_rootfs(){
     make_images ${G_ROOTFS_DIR} ${G_ROOTFS_IMAGE_PATH}
 }
 
+function cmd_make_rfs_tar()
+{
+    # pack rootfs
+    make_tarball ${G_ROOTFS_DIR} ${G_ROOTFS_TARBALL_PATH}
+}
+
+function cmd_make_clean()
+{
+    # delete tmp dirs and etc
+    log_info "Delete tmp dir ${G_TMP_DIR}"
+    rm -rf ${G_TMP_DIR}
+
+    log_info "Delete rootfs dir ${G_ROOTFS_DIR}"
+    rm -rf ${G_ROOTFS_DIR}
+}
+
 function start(){
+    ## parse input arguments ##
+    readonly SHORTOPTS="c:o:d:h"
+    readonly LONGOPTS="cmd:,output:,dev:,help,debug"
+
+    # ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} --name ${SCRIPT_NAME} -- "$@" )
+    # eval set -- "$ARGS"
     while [[ $# -ge 1 ]]; do
         case $1 in
             -c|--cmd )
@@ -213,21 +230,21 @@ function start(){
         :
     else
         log_error "Invalid input command (-c): \"${PARAM_CMD}\"";
-        exit 0;
+        exit 1;
     fi
-
+    
     [ "${PARAM_DEBUG}" == 1 ] && {
         log_info "Debug mode enabled!"
         set -x
     };
-    checkPermission;
-    # checkBorad;
+    [ ${EUID} -ne 0 ] && {
+        log_error "this command must be run as root (or sudo/su)"
+        exit 1;
+    };
+    local conf_board_file=$(get_board_config_name);
     echo "=============== Build summary ==============="
-    echo "Building Debian ${DEB_RELEASE} for ${BOARD}"
+    echo "Building Debian ${DEB_RELEASE} for ${conf_board_file}"
 
-    echo "Kernel config:      ${G_LINUX_KERNEL_DEF_CONFIG}"
-    echo "Default kernel dtb: ${DEFAULT_BOOT_DTB}"
-    echo "kernel dtbs:        ${G_LINUX_DTB}"
     echo "============================================="
     echo
 
@@ -248,11 +265,6 @@ function start(){
             log_error "Invalid input command: \"${PARAM_CMD}\"";
             ;;
     esac
-    # v1=$(loadConf "Debian" "DEBIAN_RELEASE");
-    # v2=$(loadConf "Qt" "NEED_INSTALL");
-    # v3=$(loadConf "Desktop" "NEED_INSTALL");
-    # start_desktop $v3
-    # start_qt $v2
 }
 
 start $@;

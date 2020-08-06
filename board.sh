@@ -1,10 +1,5 @@
 #!/bin/bash
 
-PACKAGES_PATH=".packeages"
-AUTO_PATH=".auto"
-TMP_ROOTFS_PATH=".tmp_rootfs"
-HOOKS_PATH="hooks"
-
 function open_pip_async(){
     local THREAD_NUM=$(loadConf "Base" "download_num");
     #create pip
@@ -27,13 +22,12 @@ function close_pip_async(){
     exec 3>&- 
 }
 
-# checkout whether is download
-function check_download_state(){
+function download_common(){
     local file_path=$1
     local path=$2
     local file_name=${file_path##*/}
     local local_file=${path}"/"$file_name
-    local status=false;
+    local status=0;
     if [[ -s ${path}"/ok" ]]
     then
         ok_str=$(cat ${path}"/ok")
@@ -41,27 +35,21 @@ function check_download_state(){
         do
             if [[ $file_path == $item ]]
             then
-                status=true;
+                status=1;
                 break;
             fi
         done
     fi
-    if [[ ${status} && -s ${local_file} ]]
+    if [[ ${status} == 1 && -s ${local_file} ]]
     then
         return 0;
     fi
-    rm -f $local_file;
-    sed -i '/'"${file_name}"'/d' ${path}"/ok"
-    return 1;
-}
-
-function download_common(){
-    check_download_state $1 $2
-    if [[ $? == 0 ]]
-    then
-        return
+    if [[ ${status} == 1 && ! -s ${local_file} ]] ; then
+        sed -i '/'"${file_name}"'/d' ${path}"/ok"
     fi
+    rm -f $local_file;
 
+    log_info "start download "$1
     download_file $1 $2
     if [[ $? == 0 ]]
     then
@@ -78,7 +66,7 @@ function download_rootfs(){
     mkdir -p $tmp_path
 
     download_file $file_path $tmp_path
-    echo "${file_path} download: "$?
+    
     if [[ $? != 0 ]];then
         echo "$file_path" >> $TMP_ROOTFS_PATH"/error"
     fi
@@ -111,9 +99,9 @@ function get_board_config_name(){
 function download_board_ini(){
     local conf_board=$1
     local conf_board_file=${conf_board##*/}
-    if [ ! -s $conf_board_file ]
+    if [ ! -s ${ABSOLUTE_DIRECTORY}"/"$conf_board_file ]
     then
-        download_file $conf_board "."
+        download_file $conf_board ${ABSOLUTE_DIRECTORY}
         if [[ $? != 0 ]]
         then
             log_error "Download ${conf_board} failed"
@@ -148,15 +136,15 @@ function download_board_packages(){
     local conf_board=$(loadConf "Base" "board_config");
     local conf_board_file=${conf_board##*/}
     download_board_ini $conf_board
-    # if [ ! -s $conf_board_file ]
-    # then
-    #     download_file $conf_board "."
-    #     if [[ $? != 0 ]]
-    #     then
-    #         log_error "Download ${conf_board} failed"
-    #         exit 1
-    #     fi
-    # fi
+    if [ ! -s $conf_board_file ]
+    then
+        download_file $conf_board "."
+        if [[ $? != 0 ]]
+        then
+            log_error "Download ${conf_board} failed"
+            exit 1
+        fi
+    fi
     local sections=$(load_section2 ${conf_board_file} "Packages")
     local sections2=$(load_section2 ${conf_board_file} "Deb")
     local sections3=$(load_section2 ${conf_board_file} "Auto")
@@ -175,15 +163,21 @@ function download_board_packages(){
             echo >&3
         }&
     done
+    echo "after packages"
     for sect in ${sections2[@]}
     do
         value=$(parse_config_value $sect)
         read -u3
         {
             download_common $value $LOCAL_APT_PATH
+            if [[ $value == *".tar.gz" ]];then
+                tar_file=${LOCAL_APT_PATH}"/"${value##*/}
+                tar -zxf $tar_file -C $LOCAL_APT_PATH
+            fi
             echo >&3
         }&
     done
+    echo "after deb"
     mkdir -p $AUTO_PATH
     for sect in ${sections3[@]}
     do
@@ -194,6 +188,7 @@ function download_board_packages(){
             echo >&3
         }&
     done
+    echo "after auto"
     for sect in ${sections4[@]}
     do
         value=$(parse_config_value $sect)
@@ -241,8 +236,6 @@ function download_board_packages(){
         log_error "download Hooks failed,stop."
         exit 1;
     fi
-
-    load_hooks;
 }
 
 # install packages
@@ -330,17 +323,19 @@ function install_auto_packages(){
 }
 
 function install_apt(){
-    local conf_board_file=$(get_board_config_name);
-    local sections=$(load_section2 ${conf_board_file} "Apt");
+    local ROOTFS_BASE=$1
+    local conf_board=$(load_config_file ${ROOTFS_BASE}"/config.ini" "Base" "board_config");
+    local conf_board_file=${conf_board##*/};
+    
+    local sections=$(load_section2 ${ROOTFS_BASE}"/"${conf_board_file} "Apt");
     local name;
     local value;
-
-    pre_call_function ${ROOTFS_BASE} "Apt" "all"
 
     IFS_old=$IFS 
     IFS=$'\n'
     for sect in ${sections[@]}
     do
+        log_info "apt install : "$sect
         name=$(parse_config_key $sect)
         value=$(parse_config_value $sect)
 
@@ -349,25 +344,27 @@ function install_apt(){
         post_call_function ${ROOTFS_BASE} "Apt" ${name}
     done
     IFS=$IFS_old
-
-    post_call_function ${ROOTFS_BASE} "Apt" "all"
 }
 
 function install_rootfs(){
     local ROOTFS_BASE=$1
     local conf_board_file=$(get_board_config_name);
+
     local sections=$(load_section2 ${conf_board_file} "Rootfs")
 
     pre_call_function ${ROOTFS_BASE} "Rootfs" "all"
-
     IFS_old=$IFS 
     IFS=$'\n'
     for sect in ${sections[@]}
     do
         value=$(parse_config_value $sect)
         key=$(parse_config_key $sect)
+  
+        pre_call_function ${ROOTFS_BASE} "Rootfs" $key
+        
         model=${key:0-7}
         m=${key:0-4}
+
         if [[ $model == "_d_"* ]]; then
             log_info "install -d "${ROOTFS_BASE}"/"$value
             install -m ${m} -d ${ROOTFS_BASE}"/"$value
@@ -376,10 +373,13 @@ function install_rootfs(){
             name=${key:0:num}
             tmp_path=${value#*/}
             tmp_file=$TMP_ROOTFS_PATH"/"${tmp_path}
-            mkdir -p $tmp_path
-            log_info "install "${m}" "${tmp_file}"  "${ROOTFS_BASE}"/"${tmp_path%/*}"/"${name}
-            install -m ${m} ${tmp_file} ${ROOTFS_BASE}"/"${tmp_path%/*}"/"${name}
+            tmp_path=${tmp_path%/*}
+            mkdir -p ${ROOTFS_BASE}"/"$tmp_path
+            log_info "install "${m}" "${tmp_file}"  "${ROOTFS_BASE}"/"${tmp_path}"/"${name}
+            install -m ${m} ${tmp_file} ${ROOTFS_BASE}"/"${tmp_path}"/"${name}
         fi
+
+        post_call_function ${ROOTFS_BASE} "Rootfs" $key
     done
     IFS=$IFS_old
 
