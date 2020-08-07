@@ -95,13 +95,27 @@ function get_board_config_name(){
     echo ${conf_board##*/}
 }
 
+function download_hooks(){
+    local board_hook=$1
+    local board_hook_file=${board_hook##*/}
+    if [ ! -s ${HOOKS_PATH}"/"$board_hook_file ]
+    then
+        conf_download_file $board_hook ${HOOKS_PATH}
+        if [[ $? != 0 ]]
+        then
+            log_error "Download ${board_hook} failed"
+            exit 1
+        fi
+    fi
+}
+
 # Recursive call to download board config
 function download_board_ini(){
     local conf_board=$1
     local conf_board_file=${conf_board##*/}
     if [ ! -s ${ABSOLUTE_DIRECTORY}"/"$conf_board_file ]
     then
-        download_file $conf_board ${ABSOLUTE_DIRECTORY}
+        conf_download_file $conf_board ${ABSOLUTE_DIRECTORY}
         if [[ $? != 0 ]]
         then
             log_error "Download ${conf_board} failed"
@@ -136,15 +150,15 @@ function download_board_packages(){
     local conf_board=$(loadConf "Base" "board_config");
     local conf_board_file=${conf_board##*/}
     download_board_ini $conf_board
-    if [ ! -s $conf_board_file ]
-    then
-        download_file $conf_board "."
-        if [[ $? != 0 ]]
-        then
-            log_error "Download ${conf_board} failed"
-            exit 1
-        fi
-    fi
+    # if [ ! -s $conf_board_file ]
+    # then
+    #     download_file $conf_board "."
+    #     if [[ $? != 0 ]]
+    #     then
+    #         log_error "Download ${conf_board} failed"
+    #         exit 1
+    #     fi
+    # fi
     local sections=$(load_section2 ${conf_board_file} "Packages")
     local sections2=$(load_section2 ${conf_board_file} "Deb")
     local sections3=$(load_section2 ${conf_board_file} "Auto")
@@ -207,7 +221,7 @@ function download_board_packages(){
         value=$(parse_config_value $sect)
         read -u3
         {
-            download_common $value $HOOKS_PATH
+            download_hooks $value
             echo >&3
         }&
     done
@@ -393,9 +407,9 @@ function load_hooks(){
     IFS=$'\n'
     for sect in ${sections[@]}
     do
-        key=$(parse_config_key $sect)
-        if [[ -s ${HOOKS_PATH}"/"${key} ]];then
-            . ${HOOKS_PATH}"/"${key}
+        board_hook=$(parse_config_value $sect)
+        if [[ -s ${HOOKS_PATH}"/"${board_hook##*/} ]];then
+            . ${HOOKS_PATH}"/"${board_hook##*/}
         fi
     done
     IFS=$IFS_old

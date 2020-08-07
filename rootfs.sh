@@ -139,7 +139,7 @@ function make_debian_rootfs(){
     umount ${ROOTFS_BASE}/{sys,proc,dev/pts,dev} 2>/dev/null || true
 
     # clear rootfs dir
-    rm -rf ${ROOTFS_BASE}/*
+    # rm -rf ${ROOTFS_BASE}/*
 
     prepare_qemu $ROOTFS_BASE
 

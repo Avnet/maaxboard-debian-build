@@ -214,6 +214,26 @@ function download_file(){
     return $ret;
 }
 
+function conf_download_file(){
+    local file_path=$1;
+    local file_name=${file_path##*/}
+    local target_path=$2
+    local base_url=$(loadConf "Base" "conf_download_url");
+    # echo $base_url
+    local base_url2=${base_url/%"<file_path>"/$file_path}
+    log_info $base_url2
+    # echo $base_url2
+    wget $base_url2 -O ${target_path}"/"${file_name}
+    ret=$?
+    if [ $ret == 0 ]
+    then
+        log_info "${file_path} download ok"
+    else
+        log_error "${file_path} download failed"
+    fi
+    return $ret;
+}
+
 function is_function_exist(){
     local func=$1
     local ret=1;

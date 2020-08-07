@@ -8,7 +8,8 @@ DEBIAN_RELEASE=buster
 [Base]
 #http://192.168.2.149/imx8m/debian-build/raw/master/<file_path>
 download_url=http://192.168.2.68:8000/<file_path>
-board_config=board/maaxboard/maaxboard-mini-weston.ini
+conf_download_url=http://192.168.2.68:8000/<file_path>
+board_config=board/maaxboard-mini/maaxboard-mini-weston.ini
 download_num=2
 images_extend_size=1536
 
