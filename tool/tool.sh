@@ -1,22 +1,10 @@
 #!/bin/bash
 
-# read config.ini
-# param 1: Section
-# param 2: Name
-function loadConf(){
-    local SECTION=$1;
-    local CONFIG=$2;
-    if [[ -f $CONFIG_FILE ]];then
-        local value=`awk -F '=' '/\['$SECTION'\]/{a=1}a==1&&$1~/'$CONFIG'/{print $2;exit}' $CONFIG_FILE`
-        echo $value;
-    fi
-}
-
 # read ini config file
 # param 1: config file
 # param 2: Section
 # param 3: Name
-function load_config_file(){
+function base_load_config_file(){
     local FILE=$1
     local SECTION=$2;
     local CONFIG=$3;
@@ -38,19 +26,24 @@ function load_config_file2(){
     local FILE=$1
     local SECTION=$2;
     local CONFIG=$3;
-    local value=$(load_config_file $FILE $SECTION $CONFIG)
+    local value=$(base_load_config_file $FILE $SECTION $CONFIG)
+
     if [ -n "$value" ];then
         echo $value;
         return 0;
     fi
     
     local includes=$(load_section $FILE "Include")
+    local tmp_path=$(get_file_path ${FILE})
     IFS_old=$IFS 
     IFS=$'\n'
     for sect in ${includes[@]}
     do
         # sub_file=$(parse_config_value $sect)
-        sub_file=${sect##*/}
+        sub_file=$(parse_config_value $sect)
+        if [[ "${sub_file}" == "./"* ]];then
+            sub_file=${tmp_path}"/"${sub_file:2}
+        fi
         # load_section2 $sub_file $m_section
         load_config_file2 $sub_file $SECTION $CONFIG
         if [[ $? == 0 ]];then
@@ -110,6 +103,7 @@ function load_section2(){
     local m_section=$2
     # echo $m_file" start load includes"
     local includes=$(load_section $m_file "Include")
+    local tmp_path=$(get_file_path ${m_file})
     if [[ -n $includes ]];then
         IFS_old=$IFS 
         IFS=$'\n'
@@ -117,7 +111,10 @@ function load_section2(){
         do
 
             # sub_file=$(parse_config_value $sect)
-            sub_file=${sect##*/}
+            sub_file=$(parse_config_value $sect)
+            if [[ "${sub_file}" == "./"* ]];then
+                sub_file=${tmp_path}"/"${sub_file:2}
+            fi
             # load_section2 $sub_file $m_section
             load_section2 $sub_file $m_section
         done
@@ -198,41 +195,48 @@ function download_file(){
     local file_path=$1;
     local file_name=${file_path##*/}
     local target_path=$2
-    local base_url=$(loadConf "Base" "download_url");
-    # echo $base_url
-    local base_url2=${base_url/%"<file_path>"/$file_path}
-    log_info $base_url2
-    # echo $base_url2
-    wget $base_url2 -O ${target_path}"/"${file_name}
-    ret=$?
-    if [ $ret == 0 ]
-    then
-        log_info "${file_path} download ok"
-    else
-        log_error "${file_path} download failed"
+    local base_type=$(load_config_file2 ${BOARD_CONFIG_FILE} "Base" "download_type");
+    local base_url=$(load_config_file2 ${BOARD_CONFIG_FILE} "Base" "download_url");
+
+    if [[ ${base_type} == "wget" ]];then
+        # echo $base_url
+        local base_url2=${base_url/%"<file_path>"/$file_path}
+        log_info $base_url2
+        # echo $base_url2
+        wget $base_url2 -O ${target_path}"/"${file_name}
+        ret=$?
+        if [ $ret == 0 ]
+        then
+            log_info "${file_path} download ok"
+        else
+            log_error "${file_path} download failed"
+        fi
+        return $ret;
+    elif [[ ${base_type} == "scp" ]]; then
+            #statements
+        scp ${base_url}"/"${file_path} ${target_path}"/"
     fi
-    return $ret;
 }
 
-function conf_download_file(){
-    local file_path=$1;
-    local file_name=${file_path##*/}
-    local target_path=$2
-    local base_url=$(loadConf "Base" "conf_download_url");
-    # echo $base_url
-    local base_url2=${base_url/%"<file_path>"/$file_path}
-    log_info $base_url2
-    # echo $base_url2
-    wget $base_url2 -O ${target_path}"/"${file_name}
-    ret=$?
-    if [ $ret == 0 ]
-    then
-        log_info "${file_path} download ok"
-    else
-        log_error "${file_path} download failed"
-    fi
-    return $ret;
-}
+# function conf_download_file(){
+#     local file_path=$1;
+#     local file_name=${file_path##*/}
+#     local target_path=$2
+#     local base_url=$(load_config_file2 ${BOARD_CONFIG_FILE} "Base" "conf_download_url");
+#     # echo $base_url
+#     local base_url2=${base_url/%"<file_path>"/$file_path}
+#     log_info $base_url2
+#     # echo $base_url2
+#     wget $base_url2 -O ${target_path}"/"${file_name}
+#     ret=$?
+#     if [ $ret == 0 ]
+#     then
+#         log_info "${file_path} download ok"
+#     else
+#         log_error "${file_path} download failed"
+#     fi
+#     return $ret;
+# }
 
 function is_function_exist(){
     local func=$1
@@ -246,6 +250,19 @@ function is_function_exist(){
         fi
     fi
     echo "1"
+}
+
+function pre_call_function_by_name(){
+    local ROOTFS_BASE=$2
+    local func_name=$1
+    local status=$(is_function_exist $func_name)
+
+    if [[ $status == "0" ]];then
+        log_info "Call function[${func_name}]"
+        ${func_name} $ROOTFS_BASE
+    else
+        log_error "function[${func_name}] not found."
+    fi
 }
 
 function pre_call_function(){
@@ -273,4 +290,10 @@ function post_call_function(){
         log_info "[${section}] ${key}: post call"
         ${func_name} $ROOTFS_BASE
     fi
+}
+
+function get_file_path(){
+    local f=$1
+    f=$(readlink -f ${f})
+    echo $(dirname $f)
 }

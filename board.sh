@@ -1,7 +1,7 @@
 #!/bin/bash
 
 function open_pip_async(){
-    local THREAD_NUM=$(loadConf "Base" "download_num");
+    local THREAD_NUM=$(load_config_file2 ${BOARD_CONFIG_FILE} "Base" "download_num");
     #create pip
     [ -e /tmp/fd1 ] || mkfifo /tmp/fd1
     # fd 3 relate to pip
@@ -63,11 +63,36 @@ function download_rootfs(){
     local file_path=$1
     local tmp_file_path=${file_path#*/}
     local tmp_path=$TMP_ROOTFS_PATH"/"${tmp_file_path%/*}
+    local local_file=$TMP_ROOTFS_PATH"/"${tmp_file_path}
+    local status=0;
     mkdir -p $tmp_path
+
+    if [[ -s ${TMP_ROOTFS_PATH}"/ok" ]]
+    then
+        ok_str=$(cat ${TMP_ROOTFS_PATH}"/ok")
+        for item in ${ok_str[@]}
+        do
+            if [[ $file_path == $item ]]
+            then
+                status=1;
+                break;
+            fi
+        done
+    fi
+    if [[ ${status} == 1 && -s ${local_file} ]]
+    then
+        return 0;
+    fi
+    if [[ ${status} == 1 && ! -s ${local_file} ]] ; then
+        sed -i '/'"${file_name}"'/d' ${path}"/ok"
+    fi
+    rm -f $local_file;
 
     download_file $file_path $tmp_path
     
-    if [[ $? != 0 ]];then
+    if [[ $? == 0 ]];then
+        echo "$1" >> $TMP_ROOTFS_PATH"/ok"
+    else
         echo "$file_path" >> $TMP_ROOTFS_PATH"/error"
     fi
 }
@@ -90,49 +115,44 @@ function check_error(){
     return $ret
 }
 
-function get_board_config_name(){
-    local conf_board=$(loadConf "Base" "board_config");
-    echo ${conf_board##*/}
-}
-
-function download_hooks(){
-    local board_hook=$1
-    local board_hook_file=${board_hook##*/}
-    if [ ! -s ${HOOKS_PATH}"/"$board_hook_file ]
-    then
-        conf_download_file $board_hook ${HOOKS_PATH}
-        if [[ $? != 0 ]]
-        then
-            log_error "Download ${board_hook} failed"
-            exit 1
-        fi
-    fi
-}
+# function download_hooks(){
+#     local board_hook=$1
+#     local board_hook_file=${board_hook##*/}
+#     if [ ! -s ${HOOKS_PATH}"/"$board_hook_file ]
+#     then
+#         conf_download_file $board_hook ${HOOKS_PATH}
+#         if [[ $? != 0 ]]
+#         then
+#             log_error "Download ${board_hook} failed"
+#             exit 1
+#         fi
+#     fi
+# }
 
 # Recursive call to download board config
-function download_board_ini(){
-    local conf_board=$1
-    local conf_board_file=${conf_board##*/}
-    if [ ! -s ${ABSOLUTE_DIRECTORY}"/"$conf_board_file ]
-    then
-        conf_download_file $conf_board ${ABSOLUTE_DIRECTORY}
-        if [[ $? != 0 ]]
-        then
-            log_error "Download ${conf_board} failed"
-            exit 1
-        fi
-    fi
+# function download_board_ini(){
+#     local conf_board=$1
+#     local conf_board_file=${conf_board##*/}
+#     if [ ! -s ${ABSOLUTE_DIRECTORY}"/"$conf_board_file ]
+#     then
+#         conf_download_file $conf_board ${ABSOLUTE_DIRECTORY}
+#         if [[ $? != 0 ]]
+#         then
+#             log_error "Download ${conf_board} failed"
+#             exit 1
+#         fi
+#     fi
 
-    local sections=$(load_section ${conf_board_file} "Include")
-    IFS_old=$IFS 
-    IFS=$'\n'
-    for sect in ${sections[@]}
-    do
-        value=$(parse_config_value $sect)
-        download_board_ini $value
-    done
-    IFS=$IFS_old
-}
+#     local sections=$(load_section ${conf_board_file} "Include")
+#     IFS_old=$IFS 
+#     IFS=$'\n'
+#     for sect in ${sections[@]}
+#     do
+#         value=$(parse_config_value $sect)
+#         download_board_ini $value
+#     done
+#     IFS=$IFS_old
+# }
 
 # download packages and deb, running ${download_num} jobs concurrently 
 # param 1: path to store debs
@@ -147,23 +167,12 @@ function download_board_packages(){
     rm -f $PACKAGES_PATH"/error"
 
     local LOCAL_APT_PATH=$1
-    local conf_board=$(loadConf "Base" "board_config");
-    local conf_board_file=${conf_board##*/}
-    download_board_ini $conf_board
-    # if [ ! -s $conf_board_file ]
-    # then
-    #     download_file $conf_board "."
-    #     if [[ $? != 0 ]]
-    #     then
-    #         log_error "Download ${conf_board} failed"
-    #         exit 1
-    #     fi
-    # fi
-    local sections=$(load_section2 ${conf_board_file} "Packages")
-    local sections2=$(load_section2 ${conf_board_file} "Deb")
-    local sections3=$(load_section2 ${conf_board_file} "Auto")
-    local sections4=$(load_section2 ${conf_board_file} "Rootfs")
-    local sections5=$(load_section ${conf_board_file} "Hooks")
+
+    local sections=$(load_section2 ${BOARD_CONFIG_FILE} "Packages")
+    local sections2=$(load_section2 ${BOARD_CONFIG_FILE} "Deb")
+    local sections3=$(load_section2 ${BOARD_CONFIG_FILE} "Auto")
+    local sections4=$(load_section2 ${BOARD_CONFIG_FILE} "Rootfs")
+    # local sections5=$(load_section2 ${BOARD_CONFIG_FILE} "Hooks")
     IFS_old=$IFS 
     IFS=$'\n'
     open_pip_async;
@@ -215,17 +224,17 @@ function download_board_packages(){
             echo >&3
         }&
     done
-    mkdir -p $HOOKS_PATH
-    for sect in ${sections5[@]}
-    do
-        value=$(parse_config_value $sect)
-        read -u3
-        {
-            download_hooks $value
-            echo >&3
-        }&
-    done
-    wait
+    # mkdir -p $HOOKS_PATH
+    # for sect in ${sections5[@]}
+    # do
+    #     value=$(parse_config_value $sect)
+    #     read -u3
+    #     {
+    #         download_hooks $value
+    #         echo >&3
+    #     }&
+    # done
+    # wait
     close_pip_async;
     IFS=$IFS_old
 
@@ -244,19 +253,18 @@ function download_board_packages(){
         exit 1;
     fi
 
-    check_error $HOOKS_PATH"/error"
-    if [[ $? != 0 ]]
-    then
-        log_error "download Hooks failed,stop."
-        exit 1;
-    fi
+    # check_error $HOOKS_PATH"/error"
+    # if [[ $? != 0 ]]
+    # then
+    #     log_error "download Hooks failed,stop."
+    #     exit 1;
+    # fi
 }
 
 # install packages
 function install_packages(){
     local ROOTFS_BASE=$1
-    local conf_board_file=$(get_board_config_name);
-    local sections=$(load_section2 ${conf_board_file} "Packages");
+    local sections=$(load_section2 ${BOARD_CONFIG_FILE} "Packages");
     
     pre_call_function ${ROOTFS_BASE} "Packages" "all"
     
@@ -297,8 +305,7 @@ function run_auto_package(){
 # run 'run.sh' in package
 function install_auto_packages(){
     local ROOTFS_BASE=$1
-    local conf_board_file=$(get_board_config_name);
-    local sections=$(load_section2 ${conf_board_file} "Auto");
+    local sections=$(load_section2 ${BOARD_CONFIG_FILE} "Auto");
 
     pre_call_function ${ROOTFS_BASE} "Auto" "all"
 
@@ -338,10 +345,7 @@ function install_auto_packages(){
 
 function install_apt(){
     local ROOTFS_BASE=$1
-    local conf_board=$(load_config_file ${ROOTFS_BASE}"/config.ini" "Base" "board_config");
-    local conf_board_file=${conf_board##*/};
-    
-    local sections=$(load_section2 ${ROOTFS_BASE}"/"${conf_board_file} "Apt");
+    local sections=$(load_section2 ${BOARD_CONFIG_FILE} "Apt");
     local name;
     local value;
 
@@ -362,9 +366,8 @@ function install_apt(){
 
 function install_rootfs(){
     local ROOTFS_BASE=$1
-    local conf_board_file=$(get_board_config_name);
 
-    local sections=$(load_section2 ${conf_board_file} "Rootfs")
+    local sections=$(load_section2 ${BOARD_CONFIG_FILE} "Rootfs")
 
     pre_call_function ${ROOTFS_BASE} "Rootfs" "all"
     IFS_old=$IFS 
@@ -401,15 +404,18 @@ function install_rootfs(){
 }
 
 function load_hooks(){
-    local conf_board_file=$(get_board_config_name);
-    local sections=$(load_section2 ${conf_board_file} "Hooks");
+    local sections=$(load_section2 ${BOARD_CONFIG_FILE} "Hooks");
+    local tmp_path=$(get_file_path ${BOARD_CONFIG_FILE})
     IFS_old=$IFS 
     IFS=$'\n'
     for sect in ${sections[@]}
     do
         board_hook=$(parse_config_value $sect)
-        if [[ -s ${HOOKS_PATH}"/"${board_hook##*/} ]];then
-            . ${HOOKS_PATH}"/"${board_hook##*/}
+        if [[ "${board_hook}" == "./"* ]];then
+            board_hook=${tmp_path}"/"${board_hook:2}
+        fi
+        if [[ -s ${board_hook} ]];then
+            . ${board_hook}
         fi
     done
     IFS=$IFS_old

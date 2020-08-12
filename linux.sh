@@ -1,44 +1,24 @@
-#bin/bash
-
-. ./tool/log.sh
-. ./tool/tool.sh
-
-readonly LINUX_OUTPUT_PATH="output_linux"
-
-function compile_linux(){
-    local base_root=$1
-    cd $base_root
-    local git_url=$(loadConf "Linux" "git_url");
-    local git_name=${git_url##*/}
-    git_name=${git_name%.git}
-    cd $git_name
-
-    local func=$(loadConf "Linux" "make_function");
-    local make_j=$(loadConf "Linux" "make_j");
-    ${func} ${base_root}"/"${LINUX_OUTPUT_PATH} $make_j
-}
+#!/bin/bash
 
 function build_linux(){
-    local base_root=$1
-    mkdir -p $base_root
-    cd base_root;
-    local git_url=$(loadConf "Linux" "git_url");
-    local git_tag=$(loadConf "Linux" "git_tag");
-    git clone -b ${git_tag} ${git_url}
+    local linux_hook=$(load_config_file2 ${BOARD_CONFIG_FILE} "Compile" "linux_hook");
+    local tmp_path=$(get_file_path ${BOARD_CONFIG_FILE})
 
-    local git_name=${git_url##*/}
-    git_name=${git_name%.git}
+    if [[ -z ${linux_hook} ]];then
+        log_error "Not found uboot hook in "${BOARD_CONFIG_FILE}
+        exit -1;
+    fi
 
-    cd $git_name
-    VERSION=`grep ^VERSION Makefile | cut -d' ' -f3`
-    PATCHLEVEL=`grep ^PATCHLEVEL Makefile | cut -d' ' -f3`
-    SUBLEVEL=`grep ^SUBLEVEL Makefile | cut -d' ' -f3`
-    branch=`git branch | cut -d' ' -f2`
-    commitid=`git log --oneline -1 | cut -d' ' -f1`
+    if [[ "${linux_hook}" == "./"* ]];then
+        linux_hook=${tmp_path}"/"${linux_hook:2}
+    fi
 
-    cd ..
-    git archive --prefix=linux/ -o linux_"${VERSION}.${PATCHLEVEL}.${SUBLEVEL}"_"{$git_tag}"_"${commitid}".tar.gz HEAD;;
-
-    cd $git_name
-    compile_linux;
+    if [[ -s ${linux_hook} ]];then
+        . ${linux_hook}
+        local linux_dir=$PARAM_OUTPUT_DIR"/linux"
+        mkdir -p $linux_dir
+        pre_call_function_by_name "linux_all_build" $linux_dir
+    else
+        log_error ${linux_hook}" not found or empty."
+    fi
 }

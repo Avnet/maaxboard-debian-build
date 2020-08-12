@@ -1,53 +1,24 @@
 #!/bin/bash
-. ./tool/log.sh
-. ./tool/tool.sh
 
-readonly GCC_OUTPUT_PATH="output_gcc"
+readonly GCC_OUTPUT_PATH=${PARAM_OUTPUT_DIR}"/gcc"
 
-function download_gcc(){
-    local base_root=$1
+function prepare_gcc(){
+    local gcc_hook=$(load_config_file2 ${BOARD_CONFIG_FILE} "Compile" "gcc_hook");
+    local tmp_path=$(get_file_path ${BOARD_CONFIG_FILE})
 
-    local download_url=$(loadConf "Gcc" "download_url");
-
-    local tmp_file=${base_root}"/"${download_url##*/}
-    [[ -s $tmp_file ]] && return 0;
-
-    download_file $download_url ${base_root}
-    if [[ $? != 0 ]];then
-        log_error "Download Gcc failed,exit";
-        exit 1;
+    if [[ -z ${gcc_hook} ]];then
+        log_error "Not found gcc hook in "${BOARD_CONFIG_FILE}
+        exit -1;
     fi
-    return 0;
-}
+    if [[ "${gcc_hook}" == "./"* ]];then
+        gcc_hook=${tmp_path}"/"${gcc_hook:2}
+    fi
 
-
-function extract_file(){
-    case $1 in
-         *.tar.gz )
-         echo "tar.gz";;
-         *.zip )
-         echo "zip";;
-         *.tar )
-         echo "tar";;
-         *.tar.bz2 )
-         echo ".tar.bz2";;
-         *.tar.xz )
-         echo ".tar.xz";;
-         *.rar )
-         echo ".rar";;
-         *.gz )
-         echo ".gz";;
-         *.bz2 )
-         echo ".bz2";;
-    esac
-}
-
-function build_gcc(){
-    local base_root=$1
-    download_gcc;
-     local download_url=$(loadConf "Gcc" "download_url");
-     local gcc_name=${download_url##*/}
-     gcc_name=${gcc_name%}
-
-
+    if [[ -s ${gcc_hook} ]];then
+        . ${gcc_hook}
+        mkdir -p $GCC_OUTPUT_PATH
+        pre_call_function_by_name "gcc_all_build" $GCC_OUTPUT_PATH
+    else
+        log_error ${gcc_hook}" not found or empty."
+    fi
 }

@@ -6,6 +6,8 @@
 readonly LOG_PATH="/tmp/logs"
 readonly ABSOLUTE_FILENAME=`readlink -e "$0"`
 readonly ABSOLUTE_DIRECTORY=`dirname ${ABSOLUTE_FILENAME}`
+BOARD_CONFIG_FILE=""
+
 function create_users(){
     # create users and set password
     useradd -m -G audio -s /bin/bash avnet
@@ -20,6 +22,7 @@ function load_hooks(){
 }
 
 function install_apts(){
+    log_info "install apts: "${BOARD_CONFIG_FILE}
     load_hooks;
     local ROOTFS_BASE="/tmp"
 
