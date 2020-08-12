@@ -112,13 +112,6 @@ function make_prepare()
 
 function cmd_make_clean()
 {
-    # delete tmp dirs and etc
-    log_info "Delete tmp dir ${G_TMP_DIR}"
-    rm -rf ${G_TMP_DIR}
-
-    log_info "Delete rootfs dir ${G_ROOTFS_DIR}"
-    rm -rf ${G_ROOTFS_DIR}
-
     rm -rf ${PARAM_OUTPUT_DIR}
 }
 
