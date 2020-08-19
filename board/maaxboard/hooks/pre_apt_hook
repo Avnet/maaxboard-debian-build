@@ -1,0 +1,14 @@
+#!/bin/bash
+
+function pre_Apt_all(){
+    local ROOTFS_BASE=$1
+    echo "--------------------------Apt pre--------------------------" >> /var/log/apt_log
+
+    echo "locales locales/locales_to_be_generated multiselect en_US.UTF-8 UTF-8" > /debconf.set
+    echo "locales locales/default_environment_locale select en_US.UTF-8" >> /debconf.set
+    echo "console-common	console-data/keymap/policy	select	Select keymap from full list" >> /debconf.set
+    echo "keyboard-configuration keyboard-configuration/variant select 'English (US)'" >> /debconf.set
+    echo "openssh-server openssh-server/permit-root-login select true'" >> /debconf.set
+    debconf-set-selections /debconf.set
+    rm -f /debconf.set
+}

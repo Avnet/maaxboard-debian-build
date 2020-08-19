@@ -1,0 +1,22 @@
+#!/bin/bash
+
+function post_Packages_all(){
+    local ROOTFS_BASE=$1
+    echo "--------------------------Packages pre--------------------------" >> ${ROOTFS_BASE}/var/log/packages_log
+}
+
+function pre_Packages_package_gpu(){
+    local ROOTFS_BASE=$1 
+    # echo "/opt/qt.5.10/lib" > ${ROOTFS_BASE}/etc/ld.so.conf.d/qt5.10.conf
+    # echo "export QT_QPA_PLATFORM=wayland" > ${ROOTFS_BASE}/etc/profile.d/qt5.sh
+    # echo "export QT_QPA_PLATFORM_PLUGIN_PATH=/opt/qt.5.10/lib/qt5/plugins" > ${ROOTFS_BASE}/etc/profile.d/qt5.sh
+    # echo "export QT_QPA_FONTDIR=/usr/share/fonts/truetype/dejavu" >> ${ROOTFS_BASE}/etc/profile.d/qt5.sh
+    # echo "export QT_FONT_SIZE_0=2" >> ${ROOTFS_BASE}/etc/profile.d/qt5.sh
+
+    rm -rf ${ROOTFS_BASE}/usr/lib/aarch64-linux-gnu/vivante/
+    rm -rf ${ROOTFS_BASE}/usr/lib/aarch64-linux-gnu/vulkan
+    rm -rf ${ROOTFS_BASE}/usr/lib/aarch64-linux-gnu/libEGL.so*
+
+    rm -rf ${ROOTFS_BASE}/usr/lib/aarch64-linux-gnu/libGLESv2.so*
+    rm -rf ${ROOTFS_BASE}/usr/lib/aarch64-linux-gnu/libGL.so*
+}

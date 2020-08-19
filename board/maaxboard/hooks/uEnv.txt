@@ -1,0 +1,6 @@
+fdt_file=maaxboard-dcss-hdmi.dtb
+#fdt_file=maaxboard-dcss-lvds.dtb
+#fdt_file=maaxboard-dcss-mipi.dtb
+#fdt_file=maaxboard-usb0-device.dtb
+console=ttymxc0,115200 console=tty1 fbcon=rotate:0
+#consoleblank=600

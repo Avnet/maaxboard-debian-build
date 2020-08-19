@@ -1,0 +1,28 @@
+#!/bin/bash
+
+function post_Packages_all(){
+    local ROOTFS_BASE=$1
+    echo "--------------------------Packages post--------------------------" >> ${ROOTFS_BASE}/var/log/packages_log
+
+    echo "#!/bin/bash" >  ${ROOTFS_BASE}/tmp/update_service.sh
+    echo "ln -s /lib/systemd/system/weston.service /etc/systemd/system/multi-user.target.wants/weston.service" >>  ${ROOTFS_BASE}/tmp/update_service.sh
+    echo "ln -s /lib/systemd/system/embest.service /etc/systemd/system/multi-user.target.wants/embest.service" >>  ${ROOTFS_BASE}/tmp/update_service.sh
+    echo "ln -s /lib/systemd/system/weston-images.service /etc/systemd/system/multi-user.target.wants/weston-images.service" >>  ${ROOTFS_BASE}/tmp/update_service.sh
+    chmod +x  ${ROOTFS_BASE}/tmp/update_service.sh
+    chroot ${ROOTFS_BASE} /tmp/update_service.sh
+}
+
+function post_Packages_package_qt(){
+    local ROOTFS_BASE=$1 
+    # echo "/opt/qt.5.10/lib" > ${ROOTFS_BASE}/etc/ld.so.conf.d/qt5.10.conf
+    # echo "export QT_QPA_PLATFORM=wayland" > ${ROOTFS_BASE}/etc/profile.d/qt5.sh
+    # echo "export QT_QPA_PLATFORM_PLUGIN_PATH=/opt/qt.5.10/lib/qt5/plugins" > ${ROOTFS_BASE}/etc/profile.d/qt5.sh
+    # echo "export QT_QPA_FONTDIR=/usr/share/fonts/truetype/dejavu" >> ${ROOTFS_BASE}/etc/profile.d/qt5.sh
+    # echo "export QT_FONT_SIZE_0=2" >> ${ROOTFS_BASE}/etc/profile.d/qt5.sh
+
+    echo "#!/bin/bash" >  ${ROOTFS_BASE}/tmp/update_ldconf.sh
+    echo "ldconfig" >>  ${ROOTFS_BASE}/tmp/update_ldconf.sh
+
+    chmod +x  ${ROOTFS_BASE}/tmp/update_ldconf.sh
+    chroot ${ROOTFS_BASE} /tmp/update_ldconf.sh
+}

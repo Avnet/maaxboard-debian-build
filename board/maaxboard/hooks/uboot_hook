@@ -1,0 +1,66 @@
+#!/bin/bash
+# this script will be loaded,and run function[uboot_all_build] when needed
+# the "uboot_all_build" name must be fixed.
+# if need to define functions,please name "function uboot_[boardname]_*",that avoids overlapping names
+#
+
+
+function uboot_maaxboard_mini_code(){
+    cd $1
+    local tag="maaxboard_v2018.03_4.14.78_1.0.0_ga"
+    if [[ -d "./uboot-imx" ]];then
+        local count=$(ls uboot-imx/ |wc -w)
+        if [[ ${count} > 0 ]];then
+            cd uboot-imx
+            return 0;
+        else
+            rm -rf uboot-imx
+        fi
+    fi
+    git clone -b ${tag} --single-branch http://Sandy:12345678@192.168.2.149/imx8m/uboot-imx.git
+    cd uboot-imx
+    local VERSION=`grep ^VERSION Makefile | cut -d' ' -f3`
+    local PATCHLEVEL=`grep ^PATCHLEVEL Makefile | cut -d' ' -f3`
+    local SUBLEVEL=`grep ^SUBLEVEL Makefile | cut -d' ' -f3`
+    local branch=`git branch | cut -d' ' -f2`
+    local commitid=`git log --oneline -1 | cut -d' ' -f1`
+    local uboot_tar="u-boot_${VERSION}.${PATCHLEVEL}.${SUBLEVEL}_${tag}_${commitid}.tar.gz"
+    
+    git archive --prefix=u-boot/ -o ../${uboot_tar} HEAD
+    mv ../${uboot_tar} $2
+}
+
+function uboot_maaxboard_mini_compile(){
+    log_info "start compile uboot..."
+    local cpu_core=$(cat /proc/cpuinfo |grep "processor"|wc -l)
+    log_info "workspace: "$(pwd)
+    log_info "gcc : "${CROSS_COMPILE}
+    make  maaxboard_defconfig
+    make -j${cpu_core}
+
+    cp -f spl/u-boot-spl.bin tools/imx-boot/iMX8M/
+    cp -f u-boot-nodtb.bin tools/imx-boot/iMX8M/
+    cp -f arch/arm/dts/maaxboard.dtb tools/imx-boot/iMX8M/
+    cd tools/imx-boot/
+    make clean
+    make SOC=iMX8M flash_ddr4_em
+    cd ../../
+
+    cp -f ./tools/imx-boot/iMX8M/flash.bin  u-boot.imx
+    cp u-boot.imx ../
+
+    log_info "uboot compile finish."
+}
+
+# compile uboot
+# param $1 : Work directory
+# output: ${BASE_ROOT}/u-boot.imx
+# output src path ${LINUX_SRC_OUTPUT}
+function uboot_all_build(){
+    local BASE_ROOT=$1
+    local tmp_path=$(pwd)
+    uboot_maaxboard_mini_code ${BASE_ROOT} ${LINUX_SRC_OUTPUT}
+    uboot_maaxboard_mini_compile
+
+    cd ${tmp_path}
+}

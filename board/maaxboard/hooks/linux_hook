@@ -1,0 +1,64 @@
+#!/bin/bash
+# this script will be loaded,and run function[linux_all_build] when needed
+# the "linux_all_build" name must be fixed.
+# if need to define functions,please name "function linux_[boardname]_*",that avoids overlapping names
+#
+
+function linux_maaxboard_mini_code(){
+    cd $1
+    local linux_name="linux-imx"
+    local tag="maaxboard_4.14.78_1.0.0_ga"
+    if [[ -d "./"${linux_name} ]];then
+        local count=$(ls ${linux_name} |wc -w)
+        if [[ ${count} > 0 ]];then
+            cd ${linux_name}
+            return 0;
+        else
+            rm -rf ${linux_name}
+        fi
+    fi
+    git clone -b ${tag} --single-branch http://Sandy:12345678@192.168.2.149/imx8m/${linux_name}.git
+    cd ${linux_name}
+    VERSION=`grep ^VERSION Makefile | cut -d' ' -f3`
+    PATCHLEVEL=`grep ^PATCHLEVEL Makefile | cut -d' ' -f3`
+    SUBLEVEL=`grep ^SUBLEVEL Makefile | cut -d' ' -f3`
+    branch=`git branch | cut -d' ' -f2`
+    commitid=`git log --oneline -1 | cut -d' ' -f1`
+    local linux_tar="linux_${VERSION}.${PATCHLEVEL}.${SUBLEVEL}_${tag}_${commitid}.tar.gz"
+
+    git archive --prefix=linux/ -o ../${linux_tar} HEAD
+    mv ../${linux_tar} $2
+}
+
+function linux_maaxboard_mini_compile(){
+    log_info "start compile linux..."
+    local cpu_core=$(cat /proc/cpuinfo |grep "processor"|wc -l)
+    log_info "workspace: "$(pwd)
+    log_info "gcc : "${CROSS_COMPILE}
+
+    make maaxboard_defconfig
+    make -j${cpu_core}
+
+    make modules_install INSTALL_MOD_PATH=$1
+    
+    cp arch/arm64/boot/Image ..
+    cp arch/arm64/boot/dts/freescale/maaxboard*.dtb ..
+    log_info "linux compile finish."
+}
+
+# compile linux
+# param $1 : Work directory
+# output: ${BASE_ROOT}/Image and dtb
+# output src path ${LINUX_SRC_OUTPUT}
+function linux_all_build(){
+    local BASE_ROOT=$1
+    local tmp_path=$(pwd)
+    local linux_modules=${BASE_ROOT}"/modules"
+
+    mkdir -p ${linux_modules}
+
+    linux_maaxboard_mini_code ${BASE_ROOT} ${LINUX_SRC_OUTPUT}
+    linux_maaxboard_mini_compile ${linux_modules}
+
+    cd ${tmp_path}
+}
