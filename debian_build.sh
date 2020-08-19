@@ -31,6 +31,7 @@ readonly DEF_BUILDENV="${ABSOLUTE_DIRECTORY}"
 PARAM_OUTPUT_DIR="${DEF_BUILDENV}/output"
 PARAM_DEBUG=0
 PARAM_CMD=""
+CLEAN_CMD=""
 
 BOARD_CONFIG_FILE=""
 DEF_DEBIAN_MIRROR=""
@@ -55,18 +56,23 @@ function usage()
     echo
     echo "Options:"
     echo "  -h  -- print this help"
-    echo "  -c <command>"
+    echo "  -b <command>"
     echo "     Supported commands:"
     echo "       all         -- build whole debian image."
     echo "       rootfs      -- build or rebuild the Debian root filesystem and create rootfs.tar.gz."
     echo "       uboot       -- build uboot"
     echo "       linux       -- build linux"
-    echo "       clean       -- clean all build artifacts (without deleting sources code or resulted images)"
-    echo "  -b  -- custom select board config file"
+    echo "  -f  -- custom select board config file"
+    echo "  -c  <command>"
+    echo "          Supported commands:"
+    echo "            all         -- clean rootfs,uboot,linux output."
+    echo "            rootfs      -- clean rootfs output"
+    echo "            uboot       -- clean uboot output"
+    echo "            linux       -- clean linux output"
     echo "  -o  -- custom select output directory (default: \"${PARAM_OUTPUT_DIR}\")"
     echo "Examples of use:"
-    echo "  clean the workplace:            sudo ./debian_build.sh -c clean"
-    echo "  make rootfs image:              sudo ./debian_build.sh -c rootfs -b maaxboard.ini"
+    echo "  clean the workplace:            sudo ./debian_build.sh -c rootfs -f maaxboard.ini"
+    echo "  make rootfs image:              sudo ./debian_build.sh -b rootfs -f maaxboard.ini"
     echo
 }
 
@@ -112,7 +118,26 @@ function make_prepare()
 
 function cmd_make_clean()
 {
-    rm -rf ${PARAM_OUTPUT_DIR}
+    log_info "clean ${CLEAN_CMD}..."
+    case $CLEAN_CMD in
+        all )
+            rm -rf ${PARAM_OUTPUT_DIR}
+            ;;
+        rootfs )
+            rm -rf ${PARAM_OUTPUT_DIR}"/rootfs"
+            ;;
+        linux )
+            rm -rf ${PARAM_OUTPUT_DIR}"/linux"
+            ;;
+        uboot )
+            rm -rf ${PARAM_OUTPUT_DIR}"/uboot"
+            ;;
+        * )
+            usage;
+            exit 1;
+            ;;
+    esac
+    exit 0;
 }
 
 function get_gcc(){
@@ -150,20 +175,22 @@ function cmd_make_all(){
 
 function start(){
     ## parse input arguments ##
-    readonly SHORTOPTS="c:o:d:h"
-    readonly LONGOPTS="cmd:,output:,dev:,help,debug"
+    # readonly SHORTOPTS="c:o:d:h"
+    # readonly LONGOPTS="cmd:,output:,dev:,help,debug"
 
     # ARGS=$(getopt -s bash --options ${SHORTOPTS} --longoptions ${LONGOPTS} --name ${SCRIPT_NAME} -- "$@" )
     # eval set -- "$ARGS"
 
-    while getopts 'c:b:o:h' OPT; do
+    while getopts 'b:f:o:c:h' OPT; do
         case $OPT in
-            c )
-                PARAM_CMD="${OPTARG}";;
             b )
+                PARAM_CMD="${OPTARG}";;
+            f )
                 BOARD_CONFIG_FILE="${OPTARG}";;
             o )
                 PARAM_OUTPUT_DIR="${OPTARG}";;
+            c )
+                CLEAN_CMD="${OPTARG}";;
             h )
                 usage
                 exit -1;;
@@ -172,14 +199,24 @@ function start(){
                 exit -1;;
         esac
     done
-    if [[ ${PARAM_CMD} != "clean" && ${PARAM_CMD} != "rootfs" && ${PARAM_CMD} != "uboot" && ${PARAM_CMD} != "linux" && ${PARAM_CMD} != "all" ]];then
-        log_error "Invalid input command (-c): \"${PARAM_CMD}\"";
+    if [[ -n $CLEAN_CMD ]];then
+        if [[ -z ${BOARD_CONFIG_FILE} ]];then
+            log_error "Invalid input command (-f): \"${BOARD_CONFIG_FILE}\"";
+            usage;
+            exit -1;
+        fi
+        local BORAD=$(load_config_file2 ${BOARD_CONFIG_FILE} "Base" "BORAD");
+        PARAM_OUTPUT_DIR=${PARAM_OUTPUT_DIR}"/"${BORAD}
+        cmd_make_clean
+    fi
+    if [[ ${PARAM_CMD} != "rootfs" && ${PARAM_CMD} != "uboot" && ${PARAM_CMD} != "linux" && ${PARAM_CMD} != "all" ]];then
+        log_error "Invalid input command (-b): \"${PARAM_CMD}\"";
         echo ""
         usage
         exit -1
     fi
-    if [[ ${PARAM_CMD} != "clean" && -z ${BOARD_CONFIG_FILE} ]];then
-        log_error "Invalid input command (-b): \"${BOARD_CONFIG_FILE}\"";
+    if [[ -z ${BOARD_CONFIG_FILE} ]];then
+        log_error "Invalid input command (-f): \"${BOARD_CONFIG_FILE}\"";
         usage;
         exit -1;
     fi
@@ -217,9 +254,6 @@ function start(){
             ;;
         linux )
             cmd_make_linux
-            ;;
-        clean )
-            cmd_make_clean
             ;;
         uboot )
             cmd_make_uboot

@@ -86,6 +86,7 @@ function buidl_images(){
 
     local first_fat_size=$(load_config_file2 ${BOARD_CONFIG_FILE} "Compile" "first_fat");
     local image_dir=${PARAM_OUTPUT_DIR}"/image"
+    rm -rf $image_dir
     mkdir -p $image_dir
     cd $image_dir
     first_fat $image_dir $first_fat_size
@@ -121,16 +122,16 @@ function buidl_images(){
     mkdir -p $rootfs_mnt
     mount /dev/mapper/loop3p2 $rootfs_mnt
 
-    local firmware=$(load_config_file2 ${BOARD_CONFIG_FILE} "Compile" "firmware");
-    local tmp_path=$(get_file_path ${BOARD_CONFIG_FILE})
-    if [[ ! -z ${firmware} ]];then
-        if [[ "${firmware}" == "./"* ]];then
-           firmware=${tmp_path}"/"${firmware:2}
-        fi
-        if [[ -d ${firmware} ]];then
-            cp -af ${firmware} ${rootfs_mnt}/lib/
-        fi
-    fi
+    # local firmware=$(load_config_file2 ${BOARD_CONFIG_FILE} "Compile" "firmware");
+    # local tmp_path=$(get_file_path ${BOARD_CONFIG_FILE})
+    # if [[ ! -z ${firmware} ]];then
+    #     if [[ "${firmware}" == "./"* ]];then
+    #        firmware=${tmp_path}"/"${firmware:2}
+    #     fi
+    #     if [[ -d ${firmware} ]];then
+    #         cp -af ${firmware} ${rootfs_mnt}/lib/
+    #     fi
+    # fi
     
     cp -af ${PARAM_OUTPUT_DIR}/linux/modules/*  $rootfs_mnt
     sync
