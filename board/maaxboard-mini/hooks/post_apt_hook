@@ -1,0 +1,19 @@
+#!/bin/bash
+
+function post_Apt_all(){
+    local ROOTFS_BASE=$1
+
+    apt-get clean
+    echo "--------------------------Apt post--------------------------" >> /var/log/apt_log
+
+    glib-compile-schemas /usr/share/glib-2.0/schemas/
+}
+
+
+function post_Apt_openssh-server(){
+    sed -i -e 's/#PermitRootLogin.*/PermitRootLogin\tyes/g' /etc/ssh/sshd_config
+}
+
+function post_Apt_udhcpd(){
+    systemctl disable hostapd.service
+}

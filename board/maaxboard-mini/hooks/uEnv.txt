@@ -1,0 +1,4 @@
+fdt_file=maaxboard-mini-mipi.dtb
+#fdt_file=maaxboard-mini-device.dtb
+#fdt_file=maaxboard-mini-lvds.dtb
+console=ttymxc0,115200 console=tty1 fbcon=rotate:0

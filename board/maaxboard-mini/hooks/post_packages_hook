@@ -1,0 +1,25 @@
+#!/bin/bash
+
+function post_Packages_all(){
+    local ROOTFS_BASE=$1
+    echo "--------------------------Packages post--------------------------" >> ${ROOTFS_BASE}/var/log/packages_log
+}
+
+function post_Packages_package_qt(){
+    local ROOTFS_BASE=$1 
+
+    echo "#!/bin/bash" >  ${ROOTFS_BASE}/tmp/update_ldconf.sh
+    echo "ldconfig" >>  ${ROOTFS_BASE}/tmp/update_ldconf.sh
+
+    chmod +x  ${ROOTFS_BASE}/tmp/update_ldconf.sh
+    chroot ${ROOTFS_BASE} /tmp/update_ldconf.sh
+}
+
+function post_Packages_package_weston(){
+    echo "#!/bin/bash" >  ${ROOTFS_BASE}/tmp/update_service.sh
+    echo "ln -s /lib/systemd/system/weston.service /etc/systemd/system/multi-user.target.wants/weston.service" >>  ${ROOTFS_BASE}/tmp/update_service.sh
+    echo "ln -s /lib/systemd/system/embest.service /etc/systemd/system/multi-user.target.wants/embest.service" >>  ${ROOTFS_BASE}/tmp/update_service.sh
+    echo "ln -s /lib/systemd/system/weston-images.service /etc/systemd/system/multi-user.target.wants/weston-images.service" >>  ${ROOTFS_BASE}/tmp/update_service.sh
+    chmod +x  ${ROOTFS_BASE}/tmp/update_service.sh
+    chroot ${ROOTFS_BASE} /tmp/update_service.sh
+}

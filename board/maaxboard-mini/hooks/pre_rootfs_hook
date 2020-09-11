@@ -1,0 +1,13 @@
+#!/bin/bash
+
+function pre_Rootfs_all(){
+    local ROOTFS_BASE=$1
+    echo "--------------------------Rootfs pre--------------------------" >> ${ROOTFS_BASE}/var/log/rootfs_log
+    
+
+    rm -rf ${ROOTFS_BASE}/usr/lib/pm-utils/sleep.d/
+    rm -rf ${ROOTFS_BASE}/usr/lib/pm-utils/module.d/
+    rm -rf ${ROOTFS_BASE}/usr/lib/pm-utils/power.d/
+
+    rm -f ${ROOTFS_BASE}/usr/sbin/policy-rc.d
+}

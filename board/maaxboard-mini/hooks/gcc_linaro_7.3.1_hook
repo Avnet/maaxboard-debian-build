@@ -1,0 +1,42 @@
+#!/bin/bash
+# this script will be loaded,and run function[gcc_all_build] when needed
+# the "gcc_all_build" name must be fixed.
+# if need to define functions,please name "function gcc_[boardname]_*",that avoids overlapping names
+#
+
+
+# prepare gcc
+# param $1 : Work directory
+# output src path ${LINUX_GCC_OUTPUT}
+function gcc_all_build(){
+    if [[ -n $CROSS_COMPILE ]];then
+        return 0;
+    fi
+
+    local BASE_ROOT=$1
+    cd $BASE_ROOT
+    if [[ ! -s "./gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz" ]];then 
+        log_info "start download gcc...."
+        wget http://192.168.2.100/imx8m/debian-rootfs-util/-/raw/master/gcc/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz
+        # git clone http://Sandy:12345678@192.168.2.149/embest_imx8_product/gcc-linaro-7.3.1_aarch64.git
+        # [[ $? != 0 ]] && {
+        #     log_error "Git clone gcc failed."
+        #     exit 1
+        # }
+
+        # mv gcc-linaro-7.3.1_aarch64/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz .
+        # rm -rf gcc-linaro-7.3.1_aarch64
+    fi
+    
+    if [[ ! -d "./gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu/bin/" ]];then
+        if [[ -s "./gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz" ]] ;then
+            log_info "tar -Jxvf gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz..."
+            tar -Jxvf gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz  > /dev/null 2>&1
+            cp gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz ${LINUX_GCC_OUTPUT}
+        fi
+    fi
+
+    export CROSS_COMPILE=${BASE_ROOT}"/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu/bin/aarch64-linux-gnu-"
+    export ARCH=arm64
+    cd -
+}
