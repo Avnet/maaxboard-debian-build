@@ -200,7 +200,7 @@ function download_file(){
 
     if [[ ${base_type} == "wget" ]];then
         # echo $base_url
-        local base_url2=${base_url/%"<file_path>"/$file_path}
+        local base_url2=${base_url/"<file_path>"/$file_path}
         log_info $base_url2
         # echo $base_url2
         wget $base_url2 -O ${target_path}"/"${file_name}
