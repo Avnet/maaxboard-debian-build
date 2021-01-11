@@ -17,7 +17,7 @@ function uboot_maaxboard_mini_code(){
             rm -rf uboot-imx
         fi
     fi
-    git clone -b ${tag} --single-branch git@192.168.2.100:imx8m/uboot-imx.git
+    git clone -b ${tag} --single-branch https://github.com/Avnet/uboot-imx.git
     cd uboot-imx
     local VERSION=`grep ^VERSION Makefile | cut -d' ' -f3`
     local PATCHLEVEL=`grep ^PATCHLEVEL Makefile | cut -d' ' -f3`

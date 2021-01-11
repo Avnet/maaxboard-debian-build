@@ -17,7 +17,7 @@ function gcc_all_build(){
     cd $BASE_ROOT
     if [[ ! -s "./gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz" ]];then 
         log_info "start download gcc...."
-        wget http://192.168.2.100/imx8m/debian-rootfs-util/-/raw/master/gcc/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz
+        wget https://xterra2.avnet.com/embest/imx8m/debian-rootfs-util/-/raw/master/gcc/gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu.tar.xz?inline=false
         # git clone http://Sandy:12345678@192.168.2.149/embest_imx8_product/gcc-linaro-7.3.1_aarch64.git
         # [[ $? != 0 ]] && {
         #     log_error "Git clone gcc failed."
