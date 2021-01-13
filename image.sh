@@ -110,17 +110,19 @@ function buidl_images(){
     echo -e "o\nn\np\n1\n20480\n+${first_fat_size}M\na\nt\nc\nn\np\n2\n${second_fat_start}\n\nw\n" | sudo fdisk ${images_name}.img
 
     log_info "image partition..."
-    losetup /dev/loop3 ${images_name}.img
-    kpartx -avs /dev/loop3
+    local loopDevice=$(losetup -f)
+    local loopName=${loopDevice:5}
+    losetup /dev/${loopName} ${images_name}.img
+    kpartx -avs /dev/${loopName}
 
-    dd if=${PARAM_OUTPUT_DIR}"/uboot/u-boot.imx" of=/dev/loop3 bs=1k seek=33 conv=fsync
-    dd if=boot_fatsd.img of=/dev/mapper/loop3p1
-    dd if=${G_ROOTFS_IMAGE_PATH} of=/dev/mapper/loop3p2
+    dd if=${PARAM_OUTPUT_DIR}"/uboot/u-boot.imx" of=/dev/${loopName} bs=1k seek=33 conv=fsync
+    dd if=boot_fatsd.img of=/dev/mapper/${loopName}p1
+    dd if=${G_ROOTFS_IMAGE_PATH} of=/dev/mapper/${loopName}p2
 
     log_info "install firmware..."
     local rootfs_mnt=${image_dir}"/rootfs"
     mkdir -p $rootfs_mnt
-    mount /dev/mapper/loop3p2 $rootfs_mnt
+    mount /dev/mapper/${loopName}p2 $rootfs_mnt
 
     # local firmware=$(load_config_file2 ${BOARD_CONFIG_FILE} "Compile" "firmware");
     # local tmp_path=$(get_file_path ${BOARD_CONFIG_FILE})
@@ -138,8 +140,8 @@ function buidl_images(){
 
     umount $rootfs_mnt
 
-    kpartx -d /dev/loop3
-    losetup -d /dev/loop3
+    kpartx -d /dev/${loopName}
+    losetup -d /dev/${loopName}
 
     mv ${images_name}.img $LINUX_IMG_OUTPUT
     log_info "release ${LINUX_IMG_OUTPUT}/${images_name}.img finished" 
