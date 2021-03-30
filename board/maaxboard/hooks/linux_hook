@@ -7,7 +7,7 @@
 function linux_maaxboard_mini_code(){
     cd $1
     local linux_name="linux-imx"
-    local tag="maaxboard_4.14.78_1.0.0_ga"
+    local tag="maaxboard_5.4.24_2.1.0"
     if [[ -d "./"${linux_name} ]];then
         local count=$(ls ${linux_name} |wc -w)
         if [[ ${count} > 0 ]];then
@@ -17,7 +17,7 @@ function linux_maaxboard_mini_code(){
             rm -rf ${linux_name}
         fi
     fi
-    git clone -b ${tag} --single-branch https://github.com/Avnet/${linux_name}.git
+    git clone -b ${tag} --single-branch http://192.168.2.100/imx8m/linux-imx.git
     cd ${linux_name}
     VERSION=`grep ^VERSION Makefile | cut -d' ' -f3`
     PATCHLEVEL=`grep ^PATCHLEVEL Makefile | cut -d' ' -f3`

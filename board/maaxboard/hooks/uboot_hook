@@ -7,7 +7,7 @@
 
 function uboot_maaxboard_mini_code(){
     cd $1
-    local tag="maaxboard_v2018.03_4.14.78_1.0.0_ga"
+    local tag="maaxboard_v2020.04_5.4.24_2.1.0"
     if [[ -d "./uboot-imx" ]];then
         local count=$(ls uboot-imx/ |wc -w)
         if [[ ${count} > 0 ]];then
@@ -17,7 +17,7 @@ function uboot_maaxboard_mini_code(){
             rm -rf uboot-imx
         fi
     fi
-    git clone -b ${tag} --single-branch https://github.com/Avnet/uboot-imx.git
+    git clone -b ${tag} --single-branch http://192.168.2.100/imx8m/uboot-imx.git
     cd uboot-imx
     local VERSION=`grep ^VERSION Makefile | cut -d' ' -f3`
     local PATCHLEVEL=`grep ^PATCHLEVEL Makefile | cut -d' ' -f3`
@@ -32,18 +32,19 @@ function uboot_maaxboard_mini_code(){
 
 function uboot_maaxboard_mini_compile(){
     log_info "start compile uboot..."
-    local cpu_core=$(cat /proc/cpuinfo |grep "processor"|wc -l)
-    log_info "workspace: "$(pwd)
-    log_info "gcc : "${CROSS_COMPILE}
-    make  maaxboard_defconfig
-    make -j${cpu_core}
+    # local cpu_core=$(cat /proc/cpuinfo |grep "processor"|wc -l)
+    # log_info "workspace: "$(pwd)
+    # log_info "gcc : "${CROSS_COMPILE}
+    # make  maaxboard_defconfig
+    # make -j${cpu_core}
 
-    cp -f spl/u-boot-spl.bin tools/imx-boot/iMX8M/
-    cp -f u-boot-nodtb.bin tools/imx-boot/iMX8M/
-    cp -f arch/arm/dts/maaxboard.dtb tools/imx-boot/iMX8M/
-    cd tools/imx-boot/
-    make clean
-    make SOC=iMX8M flash_ddr4_em
+    # cp -f spl/u-boot-spl.bin tools/imx-boot/iMX8M/
+    # cp -f u-boot-nodtb.bin tools/imx-boot/iMX8M/
+    # cp -f arch/arm/dts/maaxboard.dtb tools/imx-boot/iMX8M/
+    # cd tools/imx-boot/
+    # make clean
+    # make SOC=iMX8M flash_ddr4_em
+    . ./mk-imx-boot.sh maaxboard
     cd ../../
 
     cp -f ./tools/imx-boot/iMX8M/flash.bin  u-boot.imx
